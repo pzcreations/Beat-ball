@@ -119,6 +119,8 @@ Funciona em qualquer hospedagem com Node.js. Na **Vercel**:
 
 O HTTPS é automático. O sistema já envia HSTS, e o PWA e os cookies `Secure` exigem HTTPS.
 
+No **Render**: *New → Blueprint*, selecione o repositório (o arquivo [`render.yaml`](render.yaml) já traz build, start, região e variáveis) e preencha as três chaves do Supabase quando o Render pedir. Não defina `NODE_ENV` manualmente: o build precisa das dependências de desenvolvimento. No plano gratuito, o serviço "dorme" após um período sem acesso, e o primeiro acesso seguinte demora cerca de um minuto.
+
 Em servidor próprio: `npm run build && npm start`, atrás de um proxy reverso com HTTPS (nginx, Caddy etc.) que repasse `X-Forwarded-For`/`X-Forwarded-Host`.
 
 ---

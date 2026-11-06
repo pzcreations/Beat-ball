@@ -1,0 +1,25 @@
+# Configuração para o Render (Blueprint).
+# Render → New → Blueprint → selecione este repositório.
+# As chaves do Supabase são pedidas na criação (sync: false) e nunca ficam no Git.
+services:
+  - type: web
+    name: recepcao
+    runtime: node
+    plan: free
+    # Mais próxima do Supabase em "East US (North Virginia)".
+    region: virginia
+    branch: claude/duende-bff-4z1ujz
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_TIMEZONE
+        value: America/Sao_Paulo
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
