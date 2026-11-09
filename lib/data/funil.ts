@@ -2,13 +2,22 @@ import "server-only";
 
 import { ordenarEtapas, type EtapaInfo } from "@/lib/atendimento";
 import { ConnectionError } from "@/lib/auth";
-import type { CanalContato, EtapaCor, MotivoEncerramento, OrigemMovimentacao, ResultadoContato } from "@/lib/database.types";
+import { env } from "@/lib/env";
+import type {
+  CanalContato,
+  EtapaCor,
+  EtapaPapel,
+  MotivoEncerramento,
+  OrigemMovimentacao,
+  ResultadoContato,
+  SituacaoVisita,
+} from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 /** Etapas em ordem de funil (inclui inativas se `incluirInativas`). */
 export async function listEtapas(incluirInativas = false): Promise<EtapaInfo[]> {
   const supabase = await createClient();
-  let q = supabase.from("etapas").select("id, nome, cor, tipo, ordem, prazo_horas, ativo");
+  let q = supabase.from("etapas").select("id, nome, cor, tipo, ordem, prazo_horas, ativo, papel");
   if (!incluirInativas) q = q.eq("ativo", true);
   const { data, error } = await q;
   if (error) throw new ConnectionError();
@@ -36,6 +45,7 @@ export type FunilEtapa = {
   nome: string;
   cor: EtapaCor;
   tipo: EtapaInfo["tipo"];
+  papel: EtapaPapel | null;
   prazo_horas: number | null;
   total: number;
   atrasados: number;
@@ -43,7 +53,7 @@ export type FunilEtapa = {
 
 export async function getFunil(): Promise<FunilEtapa[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("funil_resumo");
+  const { data, error } = await supabase.rpc("funil_resumo", { p_tz: env.timezone });
   if (error) throw new ConnectionError();
   return (data as unknown as FunilEtapa[]) ?? [];
 }
@@ -74,6 +84,13 @@ export async function listCartoes(etapaId: number, limite = 50, maisRecentesPrim
 
 export type EventoLinhaDoTempo =
   | {
+      tipo: "visita";
+      id: string;
+      em: string;
+      autor: string | null;
+      visita: Visita;
+    }
+  | {
       tipo: "movimentacao";
       id: string;
       em: string;
@@ -97,7 +114,7 @@ export type EventoLinhaDoTempo =
 /** Linha do tempo do atendimento (somente gestor — garantido pelo RLS). */
 export async function getLinhaDoTempo(pessoaId: string): Promise<EventoLinhaDoTempo[]> {
   const supabase = await createClient();
-  const [movs, contatos] = await Promise.all([
+  const [movs, contatos, visitas] = await Promise.all([
     supabase
       .from("movimentacoes")
       .select(
@@ -112,6 +129,7 @@ export async function getLinhaDoTempo(pessoaId: string): Promise<EventoLinhaDoTe
       .eq("pessoa_id", pessoaId)
       .order("created_at", { ascending: false })
       .limit(100),
+    listVisitasDaPessoa(pessoaId),
   ]);
   if (movs.error || contatos.error) throw new ConnectionError();
 
@@ -136,8 +154,15 @@ export async function getLinhaDoTempo(pessoaId: string): Promise<EventoLinhaDoTe
       resultado: c.resultado,
       observacao: c.observacao,
     })),
+    ...visitas.map((v) => ({
+      tipo: "visita" as const,
+      id: `v${v.id}`,
+      em: v.created_at,
+      autor: v.autor?.full_name ?? null,
+      visita: v,
+    })),
   ];
-  // Contato que avançou a etapa acontece no mesmo instante: contato primeiro.
+  // Movimentações geradas por um contato/visita acontecem no mesmo instante.
   return eventos.sort((a, b) => b.em.localeCompare(a.em) || (a.tipo === "movimentacao" ? -1 : 1));
 }
 
@@ -163,4 +188,99 @@ export async function listAtrasados(etapas: EtapaInfo[], limite = 6) {
     .flat()
     .sort((a, b) => a.etapa_desde.localeCompare(b.etapa_desde))
     .slice(0, limite);
+}
+
+/* ------------------------------- Visitas -------------------------------- */
+
+export type Visita = {
+  id: string;
+  pessoa_id: string;
+  agendada_para: string;
+  endereco: string;
+  visitante_id: string;
+  observacao: string | null;
+  situacao: SituacaoVisita;
+  resultado_obs: string | null;
+  created_at: string;
+  updated_at: string;
+  visitante: { full_name: string } | null;
+  autor: { full_name: string } | null;
+};
+
+const VISITA_SELECT =
+  "id, pessoa_id, agendada_para, endereco, visitante_id, observacao, situacao, resultado_obs, created_at, updated_at, visitante:profiles!visitas_visitante_id_fkey(full_name), autor:profiles!visitas_created_by_fkey(full_name)";
+
+/** Gestores ativos (quem pode fazer visitas). */
+export async function listGestores() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("role", "gestor")
+    .eq("active", true)
+    .order("full_name");
+  if (error) throw new ConnectionError();
+  return data ?? [];
+}
+
+export async function listVisitasDaPessoa(pessoaId: string): Promise<Visita[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("visitas")
+    .select(VISITA_SELECT)
+    .eq("pessoa_id", pessoaId)
+    .order("agendada_para", { ascending: false })
+    .limit(50);
+  if (error) throw new ConnectionError();
+  return (data ?? []) as unknown as Visita[];
+}
+
+/** Visitas pendentes das pessoas informadas (mapa pessoa → visita). */
+export async function mapaVisitasPendentes(pessoaIds: string[]) {
+  const mapa = new Map<string, Visita>();
+  if (pessoaIds.length === 0) return mapa;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("visitas")
+    .select(VISITA_SELECT)
+    .eq("situacao", "agendada")
+    .in("pessoa_id", pessoaIds);
+  if (error) throw new ConnectionError();
+  for (const v of (data ?? []) as unknown as Visita[]) mapa.set(v.pessoa_id, v);
+  return mapa;
+}
+
+export type VisitaAgenda = Visita & {
+  pessoa: { id: string; nome: string; numero: string; igreja: { nome: string } | null } | null;
+};
+
+/** Visitas pendentes até `ate` (inclui as atrasadas, sem registro). */
+export async function listAgenda(ate: Date, visitanteId?: string): Promise<VisitaAgenda[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("visitas")
+    .select(`${VISITA_SELECT}, pessoa:pessoas(id, nome, numero, igreja:igrejas(nome))`)
+    .eq("situacao", "agendada")
+    .lt("agendada_para", ate.toISOString())
+    .order("agendada_para", { ascending: true })
+    .limit(300);
+  if (visitanteId) q = q.eq("visitante_id", visitanteId);
+  const { data, error } = await q;
+  if (error) throw new ConnectionError();
+  return ((data ?? []) as unknown as VisitaAgenda[]).filter((v) => v.pessoa);
+}
+
+/** Últimas visitas registradas (realizadas, faltas, canceladas). */
+export async function listVisitasRegistradas(limite = 15, visitanteId?: string): Promise<VisitaAgenda[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("visitas")
+    .select(`${VISITA_SELECT}, pessoa:pessoas(id, nome, numero, igreja:igrejas(nome))`)
+    .neq("situacao", "agendada")
+    .order("agendada_para", { ascending: false })
+    .limit(limite);
+  if (visitanteId) q = q.eq("visitante_id", visitanteId);
+  const { data, error } = await q;
+  if (error) throw new ConnectionError();
+  return ((data ?? []) as unknown as VisitaAgenda[]).filter((v) => v.pessoa);
 }

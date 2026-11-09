@@ -75,3 +75,15 @@ export const PERIODO_LABEL: Record<Periodo, string> = {
   mes: "Este mês",
   todos: "Todo o período",
 };
+
+/** Converte data (AAAA-MM-DD) + hora (HH:MM) no fuso informado para UTC. */
+export function zonedToUtc(data: string, hora: string, tz: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data);
+  const h = /^(\d{2}):(\d{2})$/.exec(hora);
+  if (!m || !h) return null;
+  const [y, mo, d, hh, mi] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(h[1]), Number(h[2])];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mi > 59) return null;
+  const guess = Date.UTC(y, mo - 1, d, hh, mi);
+  const first = guess - offsetMinutes(new Date(guess), tz) * 60_000;
+  return new Date(guess - offsetMinutes(new Date(first), tz) * 60_000);
+}

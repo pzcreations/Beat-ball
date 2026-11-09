@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarRange, ChevronRight, CircleCheck, ClipboardList, History, UserPlus, Users } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarRange, MapPin, ChevronRight, CircleCheck, ClipboardList, History, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -7,12 +7,13 @@ import { PessoaList } from "@/components/pessoas/pessoa-list";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui/card";
 import { ConnectionError, requireGestor } from "@/lib/auth";
-import { getFunil, listAtrasados, listEtapas } from "@/lib/data/funil";
+import { getFunil, listAgenda, listAtrasados, listEtapas } from "@/lib/data/funil";
+import { startOfZonedDay } from "@/lib/dates";
 import { listPessoas } from "@/lib/data/pessoas";
-import { ETAPA_COR, tempoDesde } from "@/lib/atendimento";
+import { ETAPA_COR, mapsHref, tempoDesde } from "@/lib/atendimento";
 import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
-import { formatInt } from "@/lib/format";
+import { formatHora, formatInt, formatVisita } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -51,7 +52,11 @@ export default async function GestorDashboard() {
     getFunil(),
     listEtapas(),
   ]);
-  const atrasados = await listAtrasados(etapas);
+  const [atrasados, visitasHoje] = await Promise.all([
+    listAtrasados(etapas),
+    listAgenda(startOfZonedDay(env.timezone, -1)),
+  ]);
+  const inicioHoje = startOfZonedDay(env.timezone, 0);
   const totalAtrasados = funil.reduce((s, f) => s + f.atrasados, 0);
   const funilAberto = funil.filter((f) => f.tipo !== "encerrada");
   const maxFunil = Math.max(1, ...funilAberto.map((f) => f.total));
@@ -145,6 +150,54 @@ export default async function GestorDashboard() {
           )}
         </Card>
       </div>
+
+      <Card className="animate-enter">
+        <CardHeader
+          title="Visitas de hoje"
+          description={visitasHoje.length > 0 ? "Inclui visitas anteriores ainda sem registro" : undefined}
+          action={
+            <ButtonLink href="/gestor/agenda" variant="ghost" size="sm">
+              Agenda
+            </ButtonLink>
+          }
+        />
+        {visitasHoje.length === 0 ? (
+          <EmptyState icon={<CalendarCheck2 />} title="Nenhuma visita para hoje" />
+        ) : (
+          <ul className="divide-y divide-line">
+            {visitasHoje.map((v) => {
+              const atrasada = new Date(v.agendada_para) < inicioHoje;
+              return (
+                <li key={v.id} className="flex items-center gap-3 px-4 py-3 md:px-5">
+                  <span
+                    className={cn(
+                      "w-14 shrink-0 rounded-md py-1.5 text-center text-sm font-semibold tabular",
+                      atrasada ? "bg-danger-bg text-danger" : "bg-azure-50 text-navy-800",
+                    )}
+                  >
+                    {atrasada ? formatVisita(v.agendada_para).split(" ")[1] : formatHora(v.agendada_para)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/gestor/cadastros/${v.pessoa!.id}`} className="block truncate text-sm font-medium text-navy-900 hover:underline">
+                      {v.pessoa!.nome}
+                    </Link>
+                    <a
+                      href={mapsHref(v.endereco)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 truncate text-xs text-muted hover:underline"
+                    >
+                      <MapPin className="size-3 shrink-0" aria-hidden />
+                      <span className="truncate">{v.endereco}</span>
+                    </a>
+                  </div>
+                  <span className="hidden shrink-0 text-xs text-muted sm:block">{v.visitante?.full_name}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
         <Card className="animate-enter">

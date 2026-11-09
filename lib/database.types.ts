@@ -13,6 +13,9 @@ export type AuditAction =
   | "pessoa.etapa_alterada"
   | "pessoa.contato_registrado"
   | "pessoa.recadastrada"
+  | "visita.agendada"
+  | "visita.reagendada"
+  | "visita.registrada"
   | "usuario.criado"
   | "usuario.editado"
   | "usuario.senha_redefinida"
@@ -37,7 +40,9 @@ export type EtapaCor =
 export type MotivoEncerramento = "sem_resposta" | "nao_deseja" | "mudou_se" | "outro";
 export type CanalContato = "whatsapp" | "ligacao" | "presencial";
 export type ResultadoContato = "conversou" | "nao_atendeu" | "nao_deseja";
-export type OrigemMovimentacao = "cadastro" | "recadastro" | "gestor" | "contato";
+export type OrigemMovimentacao = "cadastro" | "recadastro" | "gestor" | "contato" | "visita";
+export type EtapaPapel = "agendamento" | "visita_agendada" | "visita_realizada";
+export type SituacaoVisita = "agendada" | "realizada" | "faltou" | "cancelada";
 
 type ProfileFk = {
   isOneToOne: false;
@@ -109,6 +114,7 @@ export type Database = {
           ordem: number;
           prazo_horas: number | null;
           ativo: boolean;
+          papel: EtapaPapel | null;
           created_at: string;
           updated_at: string;
         };
@@ -190,6 +196,35 @@ export type Database = {
         Update: never;
         Relationships: [{ foreignKeyName: "contatos_created_by_fkey"; columns: ["created_by"] } & ProfileFk];
       };
+      visitas: {
+        Row: {
+          id: string;
+          pessoa_id: string;
+          agendada_para: string;
+          endereco: string;
+          visitante_id: string;
+          observacao: string | null;
+          situacao: SituacaoVisita;
+          resultado_obs: string | null;
+          created_at: string;
+          created_by: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: "visitas_visitante_id_fkey"; columns: ["visitante_id"] } & ProfileFk,
+          { foreignKeyName: "visitas_created_by_fkey"; columns: ["created_by"] } & ProfileFk,
+          {
+            foreignKeyName: "visitas_pessoa_id_fkey";
+            columns: ["pessoa_id"];
+            isOneToOne: false;
+            referencedRelation: "pessoas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       configuracoes: {
         Row: { id: boolean; mensagem_whatsapp: string; updated_at: string; updated_by: string | null };
         Insert: never;
@@ -227,7 +262,19 @@ export type Database = {
         Args: { p_pessoa_id: string; p_canal: string; p_resultado: string; p_observacao?: string | null };
         Returns: Json;
       };
-      funil_resumo: { Args: Record<string, never>; Returns: Json };
+      funil_resumo: { Args: { p_tz?: string }; Returns: Json };
+      agendar_visita: {
+        Args: { p_pessoa_id: string; p_agendada_para: string; p_endereco: string; p_visitante_id: string; p_observacao?: string | null };
+        Returns: string;
+      };
+      reagendar_visita: {
+        Args: { p_visita_id: string; p_agendada_para: string; p_endereco: string; p_visitante_id: string; p_observacao?: string | null };
+        Returns: undefined;
+      };
+      registrar_visita: {
+        Args: { p_visita_id: string; p_situacao: string; p_observacao?: string | null };
+        Returns: undefined;
+      };
       is_gestor: { Args: Record<string, never>; Returns: boolean };
       is_active_user: { Args: Record<string, never>; Returns: boolean };
     };

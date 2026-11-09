@@ -29,7 +29,17 @@ Depois do cadastro, cada pessoa passa por etapas com cores próprias:
 - **Atrasos:** quem passa do prazo da etapa ganha a marca 🔴 *Atrasado*, e o painel lista quem precisa de atenção.
 - **A recepção vê apenas a etapa das pessoas que ela mesma cadastrou.** Ela não vê contatos, histórico do atendimento nem configurações.
 - **Configurações** (gestor): renomear e recolorir etapas, ajustar prazos, criar, reordenar, desativar ou excluir etapas intermediárias; gerenciar igrejas; editar a mensagem do WhatsApp (`{primeiro_nome}`, `{nome}`, `{gestor}`, `{igreja}`).
-- **Linha do tempo** na ficha: cadastros, contatos e mudanças de etapa, com autor e horário.
+- **Linha do tempo** na ficha: cadastros, contatos, visitas e mudanças de etapa, com autor e horário.
+
+### Visitas pastorais
+
+- **Agendar visita** (gestor): data, horário, endereço (informado pela pessoa na conversa), quem fará a visita (um gestor, por exemplo o pastor) e observação. A pessoa vai automaticamente para *Visita agendada*. Essa etapa só é alcançada agendando; arrastar ou "Mudar etapa" para ela é recusado.
+- **Agenda:** visitas sem registro do resultado (em vermelho), de hoje, de amanhã e dos próximos 30 dias, com o filtro **Minhas visitas**. Cada visita tem o botão de mapa (abre o endereço no Google Maps), o WhatsApp com mensagem de confirmação, **Registrar visita** e **Reagendar**.
+- **Registrar visita:** *realizada* leva a pessoa para *Visita realizada*; *pessoa ausente* ou *cancelada* volta para *Aguardando agendamento*, para combinar nova data.
+- **Retornos:** a partir de *Visita realizada* é possível agendar nova visita. Todas as visitas ficam no histórico da pessoa.
+- **Atraso:** uma visita cujo dia passou sem registro do resultado aparece como atrasada no funil, na Agenda e no Painel.
+- Encerrar, reabrir ou voltar a etapa cancela a visita pendente automaticamente.
+- O **Painel** mostra as visitas de hoje, e a recepção não vê visitas nem endereços.
 
 ---
 
@@ -74,9 +84,10 @@ Outras proteções:
 1. Acesse <https://supabase.com/dashboard> e crie um projeto. Região sugerida: **South America (São Paulo)**.
 2. Em **SQL Editor**, execute **na ordem** cada arquivo da pasta [`supabase/migrations`](supabase/migrations), um de cada vez (cole o conteúdo e clique em **Run**):
    1. `20261106000000_recepcao_init.sql`: tabelas, segurança e auditoria;
-   2. `20261110000000_atendimento_pastoral.sql`: igrejas e acompanhamento pastoral.
+   2. `20261110000000_atendimento_pastoral.sql`: igrejas e acompanhamento pastoral;
+   3. `20261112000000_visitas.sql`: agendamento das visitas.
 
-   Se o primeiro já foi executado antes, rode apenas o segundo. Cadastros existentes entram automaticamente em "Aguardando contato".
+   Rode apenas os arquivos que ainda não foram executados. Cadastros existentes entram automaticamente em "Aguardando contato".
    - Se preferir a CLI: `npx supabase link --project-ref <ref>` e depois `npx supabase db push`.
 
 ### 2. Ajustar a autenticação (importante)
@@ -164,7 +175,7 @@ npm run build       # build de produção
 npm run test:db     # migration + RLS num PostgreSQL local descartável
 ```
 
-`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica as migrations e executa 109 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial; igreja obrigatória; regras de transição do funil; reabertura em cadastro repetido; recepção vendo só a etapa de quem cadastrou; proteção das etapas essenciais.
+`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica as migrations e executa 139 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial; igreja obrigatória; regras de transição do funil; reabertura em cadastro repetido; recepção vendo só a etapa de quem cadastrou; proteção das etapas essenciais; agendamento, reagendamento e registro de visitas; cancelamento automático da visita ao encerrar; recepção sem acesso a endereços.
 
 ---
 
@@ -180,6 +191,7 @@ app/
     conta/               configurações da conta
     gestor/              área administrativa (exige gestor)
       atendimentos/      funil: abas (celular) e Kanban (computador)
+      agenda/            visitas: sem registro, hoje, amanhã e próximos dias
       cadastros/         listagem, filtros e ficha da pessoa (linha do tempo)
       configuracoes/     etapas, igrejas e mensagem do WhatsApp
       mais/              menu complementar no celular

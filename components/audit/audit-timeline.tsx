@@ -1,7 +1,7 @@
-import { ArrowRightLeft, Download, KeyRound, LogIn, LogOut, MessageCircle, Pencil, RotateCcw, Settings, ShieldCheck, Trash2, UserCog, UserPlus } from "lucide-react";
+import { ArrowRightLeft, CalendarCheck, CalendarClock, CalendarPlus, Download, KeyRound, LogIn, LogOut, MessageCircle, Pencil, RotateCcw, Settings, ShieldCheck, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import type { AuditAction, Json } from "@/lib/database.types";
-import { formatNumero, formatRelative, ROLE_LABEL } from "@/lib/format";
+import { formatNumero, formatRelative, formatVisita, ROLE_LABEL } from "@/lib/format";
 
 export type AuditEntry = {
   id: number;
@@ -31,6 +31,9 @@ const ICON = {
   "pessoa.contato_registrado": MessageCircle,
   "pessoa.recadastrada": RotateCcw,
   "config.alterada": Settings,
+  "visita.agendada": CalendarPlus,
+  "visita.reagendada": CalendarClock,
+  "visita.registrada": CalendarCheck,
 } as const satisfies Record<AuditAction, unknown>;
 
 const CANAL: Record<string, string> = { whatsapp: "WhatsApp", ligacao: "ligação", presencial: "pessoalmente" };
@@ -39,6 +42,9 @@ const RESULTADO: Record<string, string> = {
   nao_atendeu: "não atendeu",
   nao_deseja: "não deseja visita",
 };
+const SITUACAO: Record<string, string> = { realizada: "Realizada", faltou: "Pessoa ausente", cancelada: "Cancelada" };
+const quando = (v: Json | undefined) => (typeof v === "string" ? formatVisita(v) : "—");
+
 const TABELA: Record<string, string> = {
   etapas: "as etapas do funil",
   igrejas: "as igrejas",
@@ -109,6 +115,21 @@ function describe(e: AuditEntry): { title: string; changes: string[] } {
       };
     case "pessoa.recadastrada":
       return { title: `cadastrou novamente ${str(d.nome)}`, changes: [] };
+    case "visita.agendada":
+      return {
+        title: `agendou visita para ${str(d.nome)}`,
+        changes: [`${quando(d.quando)}${d.visitante ? ` · ${str(d.visitante)}` : ""}`],
+      };
+    case "visita.reagendada":
+      return {
+        title: `reagendou a visita de ${str(d.nome)}`,
+        changes: [`${quando(d.antes)} → ${quando(d.depois)}`],
+      };
+    case "visita.registrada":
+      return {
+        title: `registrou a visita de ${str(d.nome)}`,
+        changes: [`${SITUACAO[str(d.situacao)] ?? str(d.situacao)} (${quando(d.quando)})`],
+      };
     case "config.alterada":
       return {
         title: `alterou ${TABELA[str(d.tabela)] ?? "as configurações"}`,

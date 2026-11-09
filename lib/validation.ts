@@ -44,7 +44,10 @@ export const pessoaSchema = z.object({
 
 export type PessoaInput = z.infer<typeof pessoaSchema>;
 
-export const uuidSchema = z.string().uuid("Identificador inválido.");
+// Formato 8-4-4-4-12 (o banco valida o tipo uuid de qualquer forma).
+export const uuidSchema = z
+  .string({ error: "Identificador inválido." })
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Identificador inválido.");
 
 export const emailSchema = z
   .string({ error: "Informe o e-mail." })
@@ -100,7 +103,11 @@ export const filtrosSchema = z.object({
   periodo: z.enum(["hoje", "7d", "30d", "mes", "todos"]).optional().catch(undefined),
   ordem: z.enum(["recentes", "antigos", "nome"]).optional().catch(undefined),
   pagina: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
-  responsavel: z.string().uuid().optional().catch(undefined),
+  responsavel: z
+    .string()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    .optional()
+    .catch(undefined),
   igreja: z.coerce.number().int().min(1).max(32_767).optional().catch(undefined),
   etapa: z.coerce.number().int().min(1).max(32_767).optional().catch(undefined),
 });

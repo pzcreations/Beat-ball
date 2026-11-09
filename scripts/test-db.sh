@@ -38,7 +38,7 @@ for t in "$ROOT"/supabase/tests/[1-9]*.sql; do
   echo "→ $(basename "$t")"
   "${PSQL[@]}" -f "$t" 2>&1 \
     | sed 's/^psql:[^ ]* NOTICE:  /  /' \
-    | grep -vE '^$|^\{"(sub|id|etapa_id)"'
+    | grep -vE '^$|^\{"(sub|id|etapa_id)"|^[0-9a-f-]{36}$'
 done
 echo "======================================"
 echo "Todos os testes de banco passaram."

@@ -10,7 +10,8 @@ export type NavIcon =
   | "history"
   | "funnel"
   | "settings"
-  | "more";
+  | "more"
+  | "calendar";
 
 export type NavItem = {
   href: string;
@@ -32,23 +33,24 @@ export function navItemsFor(role: AppRole): { sidebar: NavItem[]; bottom: NavIte
   if (role === "gestor") {
     const painel: NavItem = { href: "/gestor", label: "Painel", icon: "dashboard", exact: true };
     const atendimentos: NavItem = { href: "/gestor/atendimentos", label: "Atendimentos", icon: "funnel" };
+    const agenda: NavItem = { href: "/gestor/agenda", label: "Agenda", icon: "calendar" };
     const cadastros: NavItem = { href: "/gestor/cadastros", label: "Cadastros", icon: "users" };
     const cadastrar: NavItem = { href: "/cadastrar", label: "Cadastrar", icon: "plus" };
     const equipe: NavItem = { href: "/gestor/usuarios", label: "Equipe", icon: "team" };
     const historico: NavItem = { href: "/gestor/historico", label: "Histórico", icon: "history" };
     const config: NavItem = { href: "/gestor/configuracoes", label: "Configurações", icon: "settings" };
     return {
-      sidebar: [painel, atendimentos, cadastros, cadastrar, equipe, historico, config],
+      sidebar: [painel, atendimentos, agenda, cadastros, cadastrar, equipe, historico, config],
       bottom: [
         painel,
         atendimentos,
+        agenda,
         cadastrar,
-        cadastros,
         {
           href: "/gestor/mais",
           label: "Mais",
           icon: "more",
-          also: ["/gestor/usuarios", "/gestor/historico", "/gestor/configuracoes", "/conta"],
+          also: ["/gestor/cadastros", "/gestor/usuarios", "/gestor/historico", "/gestor/configuracoes", "/conta"],
         },
       ],
     };

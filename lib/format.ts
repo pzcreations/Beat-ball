@@ -71,3 +71,31 @@ export function initials(name: string) {
 }
 
 export const ROLE_LABEL = { recepcao: "Recepção", gestor: "Gestor" } as const;
+
+const visitaFmt = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: APP_TIMEZONE,
+  weekday: "short",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** "sáb., 15/11 às 15:00" */
+export function formatVisita(iso: string) {
+  const parts = visitaFmt.formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("weekday")} ${get("day")}/${get("month")} às ${get("hour")}:${get("minute")}`;
+}
+
+export function formatHora(iso: string) {
+  return timeFmt.format(new Date(iso));
+}
+
+/** Data (AAAA-MM-DD) e hora (HH:MM) no fuso da operação — para formulários. */
+export function partesLocais(iso: string) {
+  const d = new Date(iso);
+  const data = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const hora = new Intl.DateTimeFormat("en-GB", { timeZone: APP_TIMEZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+  return { data, hora };
+}

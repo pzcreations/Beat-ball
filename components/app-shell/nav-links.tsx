@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis, Filter, History, House, LayoutDashboard, Search, Settings, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { CalendarDays, Ellipsis, Filter, History, House, LayoutDashboard, Search, Settings, ShieldCheck, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +18,7 @@ const ICONS: Record<NavIcon, typeof House> = {
   funnel: Filter,
   settings: Settings,
   more: Ellipsis,
+  calendar: CalendarDays,
 };
 
 function useIsActive() {

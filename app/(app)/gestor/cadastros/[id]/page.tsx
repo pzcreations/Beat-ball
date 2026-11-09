@@ -1,20 +1,31 @@
-import { AlertTriangle, ArrowLeft, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarDays, MapPin, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { atualizarPessoaAction, excluirPessoaAction } from "@/app/actions/pessoas";
 import { MudarEtapa, RegistrarContato, WhatsAppLink } from "@/components/atendimento/acoes";
+import { AgendarVisita, RegistrarVisita } from "@/components/atendimento/visita-dialogs";
 import { EtapaBadge } from "@/components/atendimento/etapa-badge";
 import { LinhaDoTempo } from "@/components/atendimento/linha-do-tempo";
 import { PessoaForm } from "@/components/pessoa-form";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Alert, Card, CardHeader, PageHeader } from "@/components/ui/card";
-import { destinosPermitidos, isAtrasado, prazoLabel, renderMensagem, tempoDesde, whatsappHref } from "@/lib/atendimento";
+import {
+  destinosPermitidos,
+  isAtrasado,
+  mapsHref,
+  prazoLabel,
+  renderMensagem,
+  tempoDesde,
+  visitaAtrasada,
+  whatsappHref,
+} from "@/lib/atendimento";
 import { ConnectionError, requireGestor } from "@/lib/auth";
-import { getLinhaDoTempo, getMensagemWhatsApp, listEtapas, listIgrejas } from "@/lib/data/funil";
+import { getLinhaDoTempo, getMensagemWhatsApp, listEtapas, listGestores, listIgrejas, listVisitasDaPessoa } from "@/lib/data/funil";
+import { env } from "@/lib/env";
 import { getPessoa } from "@/lib/data/pessoas";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatVisita } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation";
 
@@ -32,11 +43,13 @@ export default async function FichaPessoaPage({ params }: Props) {
   if (!pessoa) notFound();
 
   const supabase = await createClient();
-  const [etapas, igrejas, eventos, mensagem, mesmoNumero] = await Promise.all([
+  const [etapas, igrejas, eventos, mensagem, gestores, visitas, mesmoNumero] = await Promise.all([
     listEtapas(true),
     listIgrejas(true),
     getLinhaDoTempo(id),
     getMensagemWhatsApp(),
+    listGestores(),
+    listVisitasDaPessoa(id),
     supabase.from("pessoas").select("id, nome").eq("numero", pessoa.numero).neq("id", id).limit(5),
   ]);
   if (mesmoNumero.error) throw new ConnectionError();
@@ -44,7 +57,13 @@ export default async function FichaPessoaPage({ params }: Props) {
   const atendimento = pessoa.atendimento;
   const etapa = atendimento?.etapa ? etapas.find((e) => e.id === atendimento.etapa!.id) : undefined;
   const aberto = etapa && etapa.tipo !== "concluida" && etapa.tipo !== "encerrada";
-  const atrasado = atendimento && etapa ? isAtrasado(atendimento.etapa_desde, etapa.prazo_horas) : false;
+  const pendente = visitas.find((v) => v.situacao === "agendada") ?? null;
+  const ultimoEndereco = visitas[0]?.endereco ?? null;
+  const atrasado = pendente
+    ? visitaAtrasada(pendente.agendada_para, env.timezone)
+    : atendimento && etapa
+      ? isAtrasado(atendimento.etapa_desde, etapa.prazo_horas)
+      : false;
   const wa = aberto
     ? whatsappHref(pessoa.numero, renderMensagem(mensagem, { nome: pessoa.nome, gestor: gestor.fullName, igreja: pessoa.igreja?.nome ?? null }))
     : null;
@@ -98,9 +117,48 @@ export default async function FichaPessoaPage({ params }: Props) {
                   {atendimento.tentativas_contato > 0 ? (
                     <p className="text-sm text-warning">{atendimento.tentativas_contato} tentativa(s) de contato sem resposta.</p>
                   ) : null}
+                  {pendente ? (
+                    <div className={`grid gap-1 rounded-md px-3.5 py-3 text-sm ${atrasado ? "bg-danger-bg text-danger" : "bg-azure-50 text-navy-800"}`}>
+                      <p className="flex items-center gap-2 font-medium">
+                        <CalendarDays className="size-4 shrink-0" aria-hidden />
+                        Visita {formatVisita(pendente.agendada_para)}
+                        {atrasado ? " · sem registro do resultado" : ""}
+                      </p>
+                      <a href={mapsHref(pendente.endereco)} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 hover:underline">
+                        <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+                        {pendente.endereco}
+                      </a>
+                      {pendente.visitante ? <p className="pl-6 text-[13px] opacity-80">Visitante: {pendente.visitante.full_name}</p> : null}
+                    </div>
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-2">
                     {wa ? <WhatsAppLink href={wa} block /> : null}
-                    {aberto ? <RegistrarContato pessoaId={pessoa.id} pessoaNome={pessoa.nome} block /> : null}
+                    {pendente ? (
+                      <>
+                        <RegistrarVisita visitaId={pendente.id} pessoaNome={pessoa.nome} agendadaPara={pendente.agendada_para} variant="primary" block />
+                        <AgendarVisita
+                          pessoaId={pessoa.id}
+                          pessoaNome={pessoa.nome}
+                          visita={pendente}
+                          gestores={gestores}
+                          visitantePadrao={gestor.id}
+                          variant="outline"
+                          block
+                        />
+                      </>
+                    ) : aberto ? (
+                      <AgendarVisita
+                        pessoaId={pessoa.id}
+                        pessoaNome={pessoa.nome}
+                        gestores={gestores}
+                        visitantePadrao={gestor.id}
+                        enderecoSugerido={ultimoEndereco}
+                        triggerLabel={visitas.some((v) => v.situacao === "realizada") ? "Agendar nova visita" : "Agendar visita"}
+                        variant={etapa.papel === "agendamento" || etapa.papel === "visita_realizada" ? "primary" : "outline"}
+                        block
+                      />
+                    ) : null}
+                    {aberto && !pendente ? <RegistrarContato pessoaId={pessoa.id} pessoaNome={pessoa.nome} block /> : null}
                     <MudarEtapa
                       pessoaId={pessoa.id}
                       pessoaNome={pessoa.nome}

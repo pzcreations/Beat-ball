@@ -2,12 +2,13 @@ import { Inbox } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { CartaoPessoa } from "@/components/atendimento/cartao";
+import { CartaoPessoa, type ContextoCartao } from "@/components/atendimento/cartao";
 import { DraggableCard, DropColumn } from "@/components/atendimento/kanban-dnd";
 import { EmptyState, PageHeader } from "@/components/ui/card";
 import { ETAPA_COR } from "@/lib/atendimento";
 import { requireGestor } from "@/lib/auth";
-import { getFunil, getMensagemWhatsApp, listCartoes, listEtapas } from "@/lib/data/funil";
+import { getFunil, getMensagemWhatsApp, listCartoes, listEtapas, listGestores, mapaVisitasPendentes } from "@/lib/data/funil";
+import { env } from "@/lib/env";
 import { formatInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,12 @@ export default async function AtendimentosPage({ searchParams }: Props) {
   const gestor = await requireGestor();
   const raw = await searchParams;
 
-  const [etapas, funil, mensagem] = await Promise.all([listEtapas(true), getFunil(), getMensagemWhatsApp()]);
+  const [etapas, funil, mensagem, gestores] = await Promise.all([
+    listEtapas(true),
+    getFunil(),
+    getMensagemWhatsApp(),
+    listGestores(),
+  ]);
   const visiveis = etapas.filter((e) => e.ativo || (funil.find((f) => f.id === e.id)?.total ?? 0) > 0);
   const contagem = new Map(funil.map((f) => [f.id, f]));
 
@@ -40,7 +46,25 @@ export default async function AtendimentosPage({ searchParams }: Props) {
 
   const selecionadaId = Number(raw.etapa) || visiveis[0]?.id;
   const selecionada = colunas.find((c) => c.etapa.id === selecionadaId) ?? colunas[0];
-  const nomeGestor = gestor.fullName;
+  // Visitas pendentes de quem está nas etapas de visita.
+  const idsComVisita = colunas
+    .filter((c) => c.etapa.papel === "visita_agendada" || c.etapa.papel === "visita_realizada")
+    .flatMap((c) => c.cartoes.map((x) => x.pessoa_id));
+  const visitas = await mapaVisitasPendentes(idsComVisita);
+  // Na coluna de visitas agendadas, ordena pela data da visita.
+  for (const c of colunas) {
+    if (c.etapa.papel !== "visita_agendada") continue;
+    c.cartoes.sort((a, b) =>
+      (visitas.get(a.pessoa_id)?.agendada_para ?? "9").localeCompare(visitas.get(b.pessoa_id)?.agendada_para ?? "9"),
+    );
+  }
+  const ctx: ContextoCartao = {
+    etapas,
+    mensagem,
+    gestor: { id: gestor.id, nome: gestor.fullName },
+    gestores,
+    timezone: env.timezone,
+  };
 
   return (
     <div className="grid gap-5">
@@ -96,9 +120,8 @@ export default async function AtendimentosPage({ searchParams }: Props) {
                   key={c.pessoa_id}
                   cartao={c}
                   etapa={selecionada.etapa}
-                  etapas={etapas}
-                  mensagem={mensagem}
-                  gestor={nomeGestor}
+                  visita={visitas.get(c.pessoa_id)}
+                  ctx={ctx}
                 />
               ))
             )}
@@ -145,7 +168,7 @@ export default async function AtendimentosPage({ searchParams }: Props) {
                   ) : (
                     cartoes.map((c) => (
                       <DraggableCard key={c.pessoa_id} pessoaId={c.pessoa_id} etapaId={etapa.id}>
-                        <CartaoPessoa cartao={c} etapa={etapa} etapas={etapas} mensagem={mensagem} gestor={nomeGestor} compacto />
+                        <CartaoPessoa cartao={c} etapa={etapa} visita={visitas.get(c.pessoa_id)} ctx={ctx} compacto />
                       </DraggableCard>
                     ))
                   )}

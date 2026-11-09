@@ -1,4 +1,4 @@
-import { ChevronRight, History, LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { ChevronRight, History, LogOut, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -9,6 +9,7 @@ import { requireGestor } from "@/lib/auth";
 export const metadata: Metadata = { title: "Mais" };
 
 const LINKS = [
+  { href: "/gestor/cadastros", label: "Cadastros", desc: "Busca, filtros e exportação", icon: Users },
   { href: "/gestor/usuarios", label: "Equipe", desc: "Usuários, perfis e permissões", icon: ShieldCheck },
   { href: "/gestor/historico", label: "Histórico", desc: "Atividades e alterações registradas", icon: History },
   { href: "/gestor/configuracoes", label: "Configurações", desc: "Etapas, igrejas e mensagem do WhatsApp", icon: Settings },

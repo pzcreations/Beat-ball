@@ -16,12 +16,12 @@ import { cn, initialActionState, type ActionState } from "@/lib/utils";
 /* -------------------------------------------------------------------------- */
 /* Estrutura comum: <dialog> nativo (folha inferior no celular).               */
 /* -------------------------------------------------------------------------- */
-function useDialog() {
+export function useDialog() {
   const ref = useRef<HTMLDialogElement>(null);
   return { ref, open: () => ref.current?.showModal(), close: () => ref.current?.close() };
 }
 
-function Sheet({
+export function Sheet({
   dialogRef,
   title,
   subtitle,
@@ -66,7 +66,7 @@ function Sheet({
   );
 }
 
-function OptionCard({
+export function OptionCard({
   name,
   value,
   checked,
@@ -100,7 +100,7 @@ function OptionCard({
   );
 }
 
-type TriggerProps = { variant?: "primary" | "outline" | "secondary"; size?: "sm" | "md"; block?: boolean; compact?: boolean };
+export type TriggerProps = { variant?: "primary" | "outline" | "secondary"; size?: "sm" | "md"; block?: boolean; compact?: boolean };
 
 /* -------------------------------------------------------------------------- */
 /* Registrar contato                                                          */
@@ -133,6 +133,7 @@ export function RegistrarContato({
         variant={variant}
         size={size}
         block={block}
+        className={compact ? (size === "sm" ? "w-9 px-0" : "w-11 px-0") : undefined}
         onClick={() => {
           setResultado("");
           open();
@@ -223,6 +224,7 @@ export function MudarEtapa({
         variant={variant}
         size={size}
         block={block}
+        className={compact ? (size === "sm" ? "w-9 px-0" : "w-11 px-0") : undefined}
         onClick={() => {
           setDestino(preselecionado ? String(preselecionado) : "");
           open();

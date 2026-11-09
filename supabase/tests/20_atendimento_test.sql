@@ -87,7 +87,7 @@ select test.ok((select e.nome = 'Aguardando agendamento' and a.tentativas_contat
 select test.throws(format('select public.mover_etapa(%L, %s::smallint)', (select id from public.pessoas where nome = 'Ana Paula Reis'),
                           (select id from public.etapas where tipo = 'concluida')),
                    'P0001', 'não pula etapas');
-select public.mover_etapa(:ANA, (select id from public.etapas where nome = 'Visita agendada'), null, 'Sábado 15h');
+select public.agendar_visita(:ANA, now() + interval '2 days', 'Rua das Flores, 100', :G1::uuid, 'Sábado 15h');
 select public.mover_etapa(:ANA, (select id from public.etapas where nome = 'Aguardando agendamento'), null, 'Remarcar');
 select test.ok((select e.nome = 'Aguardando agendamento' from public.atendimentos a join public.etapas e on e.id = a.etapa_id
                 where a.pessoa_id = :ANA), 'avança e volta uma etapa');

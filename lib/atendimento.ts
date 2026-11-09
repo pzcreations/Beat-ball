@@ -1,4 +1,4 @@
-import type { CanalContato, EtapaCor, EtapaTipo, MotivoEncerramento, ResultadoContato } from "@/lib/database.types";
+import type { CanalContato, EtapaCor, EtapaPapel, EtapaTipo, MotivoEncerramento, ResultadoContato, SituacaoVisita } from "@/lib/database.types";
 
 /** Etapa como usada pela interface. */
 export type EtapaInfo = {
@@ -9,6 +9,7 @@ export type EtapaInfo = {
   ordem: number;
   prazo_horas: number | null;
   ativo: boolean;
+  papel: EtapaPapel | null;
 };
 
 /** Classes de cor de cada etapa (paleta institucional, tons suaves). */
@@ -64,8 +65,9 @@ export function destinosPermitidos(etapas: EtapaInfo[], atualId: number): EtapaI
   if (atual.tipo === "encerrada") return inicial ? [inicial] : [];
 
   const pos = sequencia.findIndex((e) => e.id === atualId);
+  // "Visita agendada" só se alcança agendando (data, horário, endereço).
   const vizinhos = [sequencia[pos - 1], sequencia[pos + 1]].filter(
-    (e): e is EtapaInfo => Boolean(e) && e!.ativo,
+    (e): e is EtapaInfo => Boolean(e) && e!.ativo && e!.papel !== "visita_agendada",
   );
   const extras: EtapaInfo[] = [];
   if (atual.tipo === "concluida" && inicial && !vizinhos.some((v) => v.id === inicial.id)) extras.push(inicial);
@@ -121,4 +123,25 @@ export function renderMensagem(
 export function whatsappHref(numero: string, mensagem: string) {
   const n = numeroWhatsApp(numero);
   return n ? `https://wa.me/${n}?text=${encodeURIComponent(mensagem)}` : null;
+}
+
+export const SITUACAO_VISITA_LABEL: Record<SituacaoVisita, string> = {
+  agendada: "Agendada",
+  realizada: "Realizada",
+  faltou: "Pessoa ausente",
+  cancelada: "Cancelada",
+};
+
+const diaFmt = (tz: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** Visita pendente cujo dia já passou sem registro do resultado. */
+export function visitaAtrasada(agendadaPara: string, tz: string, agora = new Date()) {
+  const f = diaFmt(tz);
+  return f.format(new Date(agendadaPara)) < f.format(agora);
+}
+
+/** Link para abrir o endereço no aplicativo de mapas. */
+export function mapsHref(endereco: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`;
 }
