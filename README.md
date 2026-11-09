@@ -115,7 +115,8 @@ Funciona em qualquer hospedagem com Node.js. Na **Vercel**:
 
 1. Importe o repositório.
 2. Cadastre as variáveis do passo 3 em *Settings → Environment Variables*.
-3. Faça o deploy.
+3. Faça o deploy. O [`vercel.json`](vercel.json) já coloca o servidor em São Paulo (`gru1`), junto do banco.
+4. Em *Settings → Git → Production Branch*, confirme a branch onde está o código.
 
 O HTTPS é automático. O sistema já envia HSTS, e o PWA e os cookies `Secure` exigem HTTPS.
 
