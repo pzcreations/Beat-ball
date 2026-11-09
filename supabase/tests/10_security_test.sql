@@ -84,18 +84,18 @@ select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticate
 select test.throws(format('insert into public.pessoas (nome, numero, created_by) values (''Fulano'', ''999'', %L)', :G1),
                    '42501', 'recepção não define created_by');
 
-insert into public.pessoas (nome, numero) values ('  João   da Silva ', '11987654321');
-insert into public.pessoas (nome, numero) values ('Maria Conceição', '4321');
+select public.cadastrar_pessoa('  João   da Silva ', '11987654321', 1::smallint);
+select public.cadastrar_pessoa('Maria Conceição', '4321', 2::smallint);
 
 select test.ok((select count(*) = 2 from public.pessoas), 'R1 vê os próprios cadastros');
 select test.ok((select bool_and(created_by = :R1::uuid) from public.pessoas), 'created_by preenchido pelo servidor');
 select test.ok((select nome = 'João da Silva' from public.pessoas where numero = '11987654321'), 'nome normalizado');
 select test.ok((select count(*) = 1 from public.pessoas where nome_busca like '%joao%'), 'busca sem acentos');
 
-select test.throws('insert into public.pessoas (nome, numero) values (''Ab'', ''123'')', '23514', 'nome curto rejeitado');
-select test.throws('insert into public.pessoas (nome, numero) values (''Nome Válido'', ''12a'')', '23514', 'número não numérico rejeitado');
-select test.throws('insert into public.pessoas (nome, numero) values (''Nome Válido'', ''12'')', '23514', 'número curto rejeitado');
-select test.throws('insert into public.pessoas (nome, numero) values (''Nome Válido'', ''123456789012345678901'')', '23514', 'número longo rejeitado');
+select test.throws('select public.cadastrar_pessoa(''Ab'', ''123'', 1::smallint)', '23514', 'nome curto rejeitado');
+select test.throws('select public.cadastrar_pessoa(''Nome Válido'', ''12a'', 1::smallint)', '23514', 'número não numérico rejeitado');
+select test.throws('select public.cadastrar_pessoa(''Nome Válido'', ''12'', 1::smallint)', '23514', 'número curto rejeitado');
+select test.throws('select public.cadastrar_pessoa(''Nome Válido'', ''123456789012345678901'', 1::smallint)', '23514', 'número longo rejeitado');
 
 -- não edita / não exclui (RLS filtra: 0 linhas afetadas)
 update public.pessoas set nome = 'Alterado Indevido';
@@ -136,7 +136,8 @@ select test.ok((select count(*) = 0 from public.pessoas where nome = 'Alterado I
 
 select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', :X), false);
 select test.ok((select count(*) = 0 from public.pessoas), 'inativo não vê cadastros');
-select test.throws('insert into public.pessoas (nome, numero) values (''Pessoa Teste'', ''123'')', '42501', 'inativo não cadastra');
+select test.throws('insert into public.pessoas (nome, numero) values (''Pessoa Teste'', ''123'')', '42501', 'inativo não insere direto');
+select test.throws('select public.cadastrar_pessoa(''Pessoa Teste'', ''123'', 1::smallint)', '42501', 'inativo não cadastra');
 select test.throws('select public.registrar_evento(''sessao.login'')', '42501', 'inativo não registra eventos');
 reset role;
 
@@ -186,7 +187,7 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', :R1), false);
 select test.ok((select count(*) = 0 from public.pessoas), 'usuário desativado perde acesso aos cadastros');
-select test.throws('insert into public.pessoas (nome, numero) values (''Pessoa Teste'', ''123'')', '42501', 'usuário desativado não cadastra');
+select test.throws('select public.cadastrar_pessoa(''Pessoa Teste'', ''123'', 1::smallint)', '42501', 'usuário desativado não cadastra');
 reset role;
 
 -- Ninguém (nem gestor) consegue apagar/alterar o histórico
@@ -199,6 +200,3 @@ reset role;
 -- Usuário com cadastros não pode ser apagado (apenas desativado)
 select test.throws(format('delete from auth.users where id = %L', :R1), '23503', 'usuário com cadastros não é apagado (integridade)');
 
-\echo '======================================'
-\echo 'Todos os testes de banco passaram.'
-\echo '======================================'

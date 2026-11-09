@@ -84,7 +84,7 @@ export default async function InicioPage() {
             description="Os cadastros que você realizar aparecerão aqui."
           />
         ) : (
-          <PessoaList items={recentes.map((r) => ({ ...r, autor: null }))} />
+          <PessoaList items={recentes} />
         )}
       </Card>
     </div>

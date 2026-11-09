@@ -1,4 +1,5 @@
-import { CalendarDays, CalendarRange, ClipboardList, History, UserPlus, Users } from "lucide-react";
+import { CalendarDays, CalendarRange, ChevronRight, CircleCheck, ClipboardList, History, UserPlus, Users } from "lucide-react";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 import { BarChart } from "@/components/charts/bar-chart";
@@ -6,7 +7,10 @@ import { PessoaList } from "@/components/pessoas/pessoa-list";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui/card";
 import { ConnectionError, requireGestor } from "@/lib/auth";
+import { getFunil, listAtrasados, listEtapas } from "@/lib/data/funil";
 import { listPessoas } from "@/lib/data/pessoas";
+import { ETAPA_COR, tempoDesde } from "@/lib/atendimento";
+import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { formatInt } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -41,10 +45,16 @@ export default async function GestorDashboard() {
   const user = await requireGestor();
   const supabase = await createClient();
 
-  const [statsRes, recentes] = await Promise.all([
+  const [statsRes, recentes, funil, etapas] = await Promise.all([
     supabase.rpc("dashboard_stats", { p_tz: env.timezone }),
     listPessoas({ pagina: 1 }, { withAuthor: true }),
+    getFunil(),
+    listEtapas(),
   ]);
+  const atrasados = await listAtrasados(etapas);
+  const totalAtrasados = funil.reduce((s, f) => s + f.atrasados, 0);
+  const funilAberto = funil.filter((f) => f.tipo !== "encerrada");
+  const maxFunil = Math.max(1, ...funilAberto.map((f) => f.total));
   if (statsRes.error) throw new ConnectionError();
   const stats = statsRes.data as unknown as Stats;
   const ultimos = recentes.items.slice(0, 6);
@@ -68,6 +78,73 @@ export default async function GestorDashboard() {
         <StatCard label="Últimos 7 dias" value={stats.ultimos_7_dias} icon={CalendarRange} />
         <StatCard label="Neste mês" value={stats.mes} icon={CalendarRange} />
       </section>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-6">
+        <Card className="animate-enter">
+          <CardHeader
+            title="Acompanhamento pastoral"
+            description="Pessoas em cada etapa"
+            action={
+              <ButtonLink href="/gestor/atendimentos" variant="ghost" size="sm">
+                Abrir
+              </ButtonLink>
+            }
+          />
+          <ul className="grid gap-1 p-2 md:p-3">
+            {funil.map((f) => (
+              <li key={f.id}>
+                <Link
+                  href={`/gestor/atendimentos?etapa=${f.id}`}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 rounded-md px-2 py-2 hover:bg-azure-50/70"
+                >
+                  <span className="flex min-w-0 items-center gap-2 text-sm text-navy-900">
+                    <span className={cn("size-2.5 shrink-0 rounded-full", ETAPA_COR[f.cor].dot)} aria-hidden />
+                    <span className="truncate">{f.nome}</span>
+                    {f.atrasados > 0 ? (
+                      <span className="shrink-0 rounded-full bg-danger-bg px-1.5 text-xs font-medium text-danger">
+                        {f.atrasados} atrasado{f.atrasados > 1 ? "s" : ""}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-sm font-semibold text-navy-900 tabular">{formatInt(f.total)}</span>
+                  {f.tipo !== "encerrada" ? (
+                    <svg viewBox="0 0 100 4" preserveAspectRatio="none" className="col-span-2 h-1.5 w-full" aria-hidden>
+                      <rect width="100" height="4" rx="2" fill="#eef3f9" />
+                      <rect width={(f.total / maxFunil) * 100} height="4" rx="2" fill={ETAPA_COR[f.cor].hex} />
+                    </svg>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card className="animate-enter">
+          <CardHeader
+            title="Precisam de atenção"
+            description={totalAtrasados > 0 ? `${formatInt(totalAtrasados)} pessoa(s) com prazo vencido` : "Prazos em dia"}
+          />
+          {atrasados.length === 0 ? (
+            <EmptyState icon={<CircleCheck />} title="Nenhum atendimento atrasado" description="Todos os contatos e agendamentos estão dentro do prazo." />
+          ) : (
+            <ul className="divide-y divide-line">
+              {atrasados.map((a) => (
+                <li key={a.pessoa_id}>
+                  <Link href={`/gestor/cadastros/${a.pessoa_id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-azure-50/60 md:px-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-navy-900">{a.pessoa!.nome}</p>
+                      <p className="truncate text-xs text-muted">
+                        {a.etapa.nome} · <span className="text-danger">{tempoDesde(a.etapa_desde)}</span>
+                      </p>
+                    </div>
+                    <ChevronRight className="size-4 shrink-0 text-subtle" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
         <Card className="animate-enter">

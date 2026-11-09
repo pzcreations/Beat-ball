@@ -13,7 +13,23 @@ Sistema web (PWA) para cadastro de pessoas na recepção, com dois perfis de ace
 | **Recepção** | Cadastrar pessoas (nome + número); ver os próprios cadastros; consultar **todos** os cadastros somente se o gestor liberar; alterar o próprio nome e senha. |
 | **Gestor** | Tudo da recepção, mais: painel com indicadores reais e gráfico de 30 dias; listar, buscar (nome ou número, sem distinção de acentos), filtrar por período e responsável e ordenar os cadastros; editar; excluir com confirmação; exportar CSV; gerenciar usuários e permissões; redefinir senhas; consultar o histórico de atividades. |
 
-Telas: login, início da recepção, cadastro, consulta, painel do gestor, gerenciamento de cadastros, edição, equipe (usuários), histórico e minha conta.
+Telas: login, início da recepção, cadastro, consulta, painel do gestor, atendimentos (funil), ficha da pessoa, gerenciamento de cadastros, equipe (usuários), histórico, configurações e minha conta.
+
+### Acompanhamento pastoral (funil de etapas)
+
+Depois do cadastro, cada pessoa passa por etapas com cores próprias:
+
+🟡 **Aguardando contato** (prazo 24 h) → 🔵 **Aguardando agendamento** (prazo 3 dias) → 🔷 **Visita agendada** → 🟢 **Visita realizada** → ✅ **Acompanhamento concluído**. A qualquer momento a pessoa pode ir para ⚪ **Encerrado**, sempre com motivo.
+
+- **Igreja obrigatória no cadastro.** As quatro igrejas já vêm configuradas; o aparelho lembra a última igreja usada.
+- **Atendimentos** (gestor): abas por etapa no celular e quadro Kanban com arrastar e soltar no computador. Cada cartão tem os botões **Chamar no WhatsApp** (mensagem pronta), **Registrar contato** e **Mudar etapa**.
+- **Registrar contato:** "conversou" avança a pessoa para *Aguardando agendamento*; "não atendeu" conta a tentativa; "não deseja visita" encerra o atendimento.
+- **Regras garantidas pelo banco:** só gestores mudam etapas; avança ou volta uma etapa por vez; encerrar exige motivo; um atendimento encerrado ou concluído só sai dali reabrindo.
+- **Cadastro repetido:** mesmo número **e** mesmo nome reabre o atendimento (ou registra o novo cadastro, se já estiver em andamento). Mesmo número com outro nome cria uma pessoa nova, e a ficha mostra o aviso "mesmo número de…".
+- **Atrasos:** quem passa do prazo da etapa ganha a marca 🔴 *Atrasado*, e o painel lista quem precisa de atenção.
+- **A recepção vê apenas a etapa das pessoas que ela mesma cadastrou.** Ela não vê contatos, histórico do atendimento nem configurações.
+- **Configurações** (gestor): renomear e recolorir etapas, ajustar prazos, criar, reordenar, desativar ou excluir etapas intermediárias; gerenciar igrejas; editar a mensagem do WhatsApp (`{primeiro_nome}`, `{nome}`, `{gestor}`, `{igreja}`).
+- **Linha do tempo** na ficha: cadastros, contatos e mudanças de etapa, com autor e horário.
 
 ---
 
@@ -56,7 +72,11 @@ Outras proteções:
 ### 1. Criar o projeto no Supabase
 
 1. Acesse <https://supabase.com/dashboard> e crie um projeto. Região sugerida: **South America (São Paulo)**.
-2. Em **SQL Editor**, cole e execute todo o conteúdo de [`supabase/migrations/20261106000000_recepcao_init.sql`](supabase/migrations/20261106000000_recepcao_init.sql).
+2. Em **SQL Editor**, execute **na ordem** cada arquivo da pasta [`supabase/migrations`](supabase/migrations), um de cada vez (cole o conteúdo e clique em **Run**):
+   1. `20261106000000_recepcao_init.sql`: tabelas, segurança e auditoria;
+   2. `20261110000000_atendimento_pastoral.sql`: igrejas e acompanhamento pastoral.
+
+   Se o primeiro já foi executado antes, rode apenas o segundo. Cadastros existentes entram automaticamente em "Aguardando contato".
    - Se preferir a CLI: `npx supabase link --project-ref <ref>` e depois `npx supabase db push`.
 
 ### 2. Ajustar a autenticação (importante)
@@ -144,7 +164,7 @@ npm run build       # build de produção
 npm run test:db     # migration + RLS num PostgreSQL local descartável
 ```
 
-`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica a migration e executa 55 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial.
+`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica as migrations e executa 109 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial; igreja obrigatória; regras de transição do funil; reabertura em cadastro repetido; recepção vendo só a etapa de quem cadastrou; proteção das etapas essenciais.
 
 ---
 
@@ -154,12 +174,15 @@ npm run test:db     # migration + RLS num PostgreSQL local descartável
 app/
   login/                 tela e ação de login
   (app)/                 área autenticada (layout com menu)
-    inicio/              início da recepção
+    inicio/              início da recepção (com a etapa de cada cadastro)
     cadastrar/           formulário de cadastro
     consulta/            consulta da recepção (escopo definido pelo RLS)
     conta/               configurações da conta
     gestor/              área administrativa (exige gestor)
-      cadastros/         listagem, filtros, edição e exclusão
+      atendimentos/      funil: abas (celular) e Kanban (computador)
+      cadastros/         listagem, filtros e ficha da pessoa (linha do tempo)
+      configuracoes/     etapas, igrejas e mensagem do WhatsApp
+      mais/              menu complementar no celular
       usuarios/          equipe, permissões e senhas
       historico/         trilha de auditoria
       exportar/          exportação CSV

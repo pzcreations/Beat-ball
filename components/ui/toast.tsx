@@ -3,6 +3,7 @@
 import { CircleAlert, CircleCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Portal } from "@/components/ui/portal";
 import { cn } from "@/lib/utils";
 
 type ToastProps = {
@@ -31,6 +32,7 @@ export function Toast({ message, tone = "success", stamp, duration = 3800 }: Toa
   const visible = Boolean(message) && stamp !== undefined && dismissed !== stamp && expired !== stamp;
 
   return (
+    <Portal>
     <div
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 top-[calc(64px+env(safe-area-inset-top))] z-50 flex justify-center px-4 md:top-auto md:bottom-6"
@@ -61,5 +63,6 @@ export function Toast({ message, tone = "success", stamp, duration = 3800 }: Toa
         </div>
       ) : null}
     </div>
+    </Portal>
   );
 }

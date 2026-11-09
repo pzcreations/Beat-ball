@@ -8,6 +8,7 @@ import { PessoaList } from "@/components/pessoas/pessoa-list";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, EmptyState, PageHeader } from "@/components/ui/card";
 import { ConnectionError, requireGestor } from "@/lib/auth";
+import { listEtapas, listIgrejas } from "@/lib/data/funil";
 import { PAGE_SIZE, listPessoas } from "@/lib/data/pessoas";
 import { formatInt } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -27,16 +28,27 @@ export default async function CadastrosPage({ searchParams }: Props) {
     ordem: raw.ordem === "recentes" ? undefined : raw.ordem,
     pagina: raw.pagina,
     responsavel: raw.responsavel || undefined,
+    igreja: raw.igreja || undefined,
+    etapa: raw.etapa || undefined,
   });
 
   const supabase = await createClient();
-  const [lista, usuarios] = await Promise.all([
+  const [lista, usuarios, igrejas, etapas] = await Promise.all([
     listPessoas(filtros, { withAuthor: true }),
     supabase.from("profiles").select("id, full_name").order("full_name"),
+    listIgrejas(true),
+    listEtapas(true),
   ]);
   if (usuarios.error) throw new ConnectionError();
 
-  const params = { q: filtros.q, periodo: filtros.periodo, ordem: filtros.ordem, responsavel: filtros.responsavel };
+  const params = {
+    q: filtros.q,
+    periodo: filtros.periodo,
+    ordem: filtros.ordem,
+    responsavel: filtros.responsavel,
+    igreja: filtros.igreja,
+    etapa: filtros.etapa,
+  };
   const exportHref = buildHref("/gestor/exportar", params);
 
   return (
@@ -56,7 +68,11 @@ export default async function CadastrosPage({ searchParams }: Props) {
         }
       />
 
-      <PessoaFilters action="/gestor/cadastros" filtros={filtros} advanced responsaveis={usuarios.data ?? []} />
+      <PessoaFilters action="/gestor/cadastros" filtros={filtros} advanced
+        responsaveis={usuarios.data ?? []}
+        igrejas={igrejas}
+        etapas={etapas}
+      />
 
       <Card className="animate-enter overflow-hidden">
         {lista.items.length === 0 ? (

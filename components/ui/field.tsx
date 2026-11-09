@@ -74,3 +74,16 @@ export function Checkbox({ className, ...props }: ComponentProps<"input">) {
     />
   );
 }
+
+export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
+  return (
+    <textarea
+      className={cn(
+        inputClass,
+        "h-auto min-h-[88px] resize-y py-2.5 leading-relaxed md:h-auto",
+        className,
+      )}
+      {...props}
+    />
+  );
+}

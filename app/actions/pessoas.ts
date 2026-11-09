@@ -9,14 +9,21 @@ import { createClient } from "@/lib/supabase/server";
 import type { ActionState } from "@/lib/utils";
 import { fieldErrors, pessoaSchema, uuidSchema } from "@/lib/validation";
 
-type PessoaFields = { nome: string; numero: string };
+type PessoaFields = { nome: string; numero: string; igrejaId: string };
 
 function readPessoa(formData: FormData) {
   return {
     nome: String(formData.get("nome") ?? ""),
     numero: String(formData.get("numero") ?? ""),
+    igrejaId: String(formData.get("igrejaId") ?? ""),
   };
 }
+
+const MENSAGEM_CADASTRO: Record<string, string> = {
+  novo: "Cadastro realizado com sucesso.",
+  reaberto: "Esta pessoa já tinha cadastro. O atendimento foi reaberto.",
+  ja_em_atendimento: "Esta pessoa já está em atendimento. O gestor verá o novo registro.",
+};
 
 /** Cadastro de pessoa (recepção e gestor). */
 export async function criarPessoaAction(
@@ -31,8 +38,13 @@ export async function criarPessoaAction(
   }
 
   const supabase = await createClient();
-  // created_by, created_at e updated_at são definidos pelo banco.
-  const { error } = await supabase.from("pessoas").insert(parsed.data);
+  // A função do banco define o responsável, cria o atendimento e, se a pessoa
+  // já existir (mesmo número e nome), reabre em vez de duplicar.
+  const { data, error } = await supabase.rpc("cadastrar_pessoa", {
+    p_nome: parsed.data.nome,
+    p_numero: parsed.data.numero,
+    p_igreja_id: parsed.data.igrejaId,
+  });
   if (error) {
     return {
       status: "error",
@@ -42,8 +54,14 @@ export async function criarPessoaAction(
     };
   }
 
+  const situacao = (data as { situacao?: string } | null)?.situacao ?? "novo";
   revalidatePath("/", "layout");
-  return { status: "success", message: "Cadastro realizado com sucesso.", at: Date.now() };
+  return {
+    status: "success",
+    message: MENSAGEM_CADASTRO[situacao] ?? MENSAGEM_CADASTRO.novo,
+    values: { igrejaId: String(parsed.data.igrejaId) },
+    at: Date.now(),
+  };
 }
 
 /** Edição de cadastro (somente gestor; o RLS também impõe esta regra). */
@@ -64,7 +82,7 @@ export async function atualizarPessoaAction(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("pessoas")
-    .update(parsed.data)
+    .update({ nome: parsed.data.nome, numero: parsed.data.numero, igreja_id: parsed.data.igrejaId })
     .eq("id", id.data)
     .select("id");
 

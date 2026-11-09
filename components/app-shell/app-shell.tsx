@@ -6,6 +6,7 @@ import { signOutAction } from "@/app/actions/session";
 import { navItemsFor } from "@/components/app-shell/nav-items";
 import { BottomNav, SidebarNav } from "@/components/app-shell/nav-links";
 import { BrandLockup, BrandMark } from "@/components/brand";
+import { Toaster } from "@/components/ui/toaster";
 import type { CurrentUser } from "@/lib/auth";
 import { ROLE_LABEL, initials } from "@/lib/format";
 
@@ -26,8 +27,8 @@ function Avatar({ name, className = "" }: { name: string; className?: string }) 
  *  - tablet/desktop: menu lateral fixo.
  */
 export function AppShell({ user, children }: { user: CurrentUser; children: ReactNode }) {
-  const items = navItemsFor(user.role);
-  const homeHref = items[0]?.href ?? "/";
+  const { sidebar, bottom } = navItemsFor(user.role);
+  const homeHref = sidebar[0]?.href ?? "/";
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[248px_1fr]">
@@ -37,7 +38,7 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
           <BrandLockup subtitle={user.role === "gestor" ? "Gestão" : "Atendimento"} />
         </Link>
         <div className="flex-1 overflow-y-auto p-3">
-          <SidebarNav items={items} />
+          <SidebarNav items={sidebar} />
         </div>
         <div className="border-t border-line p-3">
           <Link
@@ -82,7 +83,8 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
         </main>
       </div>
 
-      <BottomNav items={items} />
+      <BottomNav items={bottom} />
+      <Toaster />
     </div>
   );
 }

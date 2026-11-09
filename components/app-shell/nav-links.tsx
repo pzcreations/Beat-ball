@@ -1,6 +1,6 @@
 "use client";
 
-import { History, House, LayoutDashboard, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Ellipsis, Filter, History, House, LayoutDashboard, Search, Settings, ShieldCheck, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -15,12 +15,16 @@ const ICONS: Record<NavIcon, typeof House> = {
   users: Users,
   team: ShieldCheck,
   history: History,
+  funnel: Filter,
+  settings: Settings,
+  more: Ellipsis,
 };
 
 function useIsActive() {
   const pathname = usePathname();
+  const match = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (item: NavItem) =>
-    item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    (item.exact ? pathname === item.href : match(item.href)) || (item.also ?? []).some(match);
 }
 
 /** Navegação lateral (tablet/desktop). */

@@ -30,9 +30,16 @@ export const numeroSchema = z
       .max(20, "O número deve ter no máximo 20 dígitos."),
   );
 
+export const igrejaIdSchema = z.coerce
+  .number({ error: "Selecione a igreja." })
+  .int("Selecione a igreja.")
+  .min(1, "Selecione a igreja.")
+  .max(32_767, "Selecione a igreja.");
+
 export const pessoaSchema = z.object({
   nome: nomeSchema,
   numero: numeroSchema,
+  igrejaId: igrejaIdSchema,
 });
 
 export type PessoaInput = z.infer<typeof pessoaSchema>;
@@ -94,6 +101,8 @@ export const filtrosSchema = z.object({
   ordem: z.enum(["recentes", "antigos", "nome"]).optional().catch(undefined),
   pagina: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
   responsavel: z.string().uuid().optional().catch(undefined),
+  igreja: z.coerce.number().int().min(1).max(32_767).optional().catch(undefined),
+  etapa: z.coerce.number().int().min(1).max(32_767).optional().catch(undefined),
 });
 
 export type Filtros = z.infer<typeof filtrosSchema>;

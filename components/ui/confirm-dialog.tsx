@@ -5,6 +5,7 @@ import { useActionState, useEffect, useId, useRef, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/card";
+import { Portal } from "@/components/ui/portal";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { initialActionState, type ActionState } from "@/lib/utils";
 
@@ -55,6 +56,7 @@ export function ConfirmDialog({
       >
         {trigger}
       </Button>
+      <Portal>
       <dialog
         ref={ref}
         aria-labelledby={titleId}
@@ -88,6 +90,7 @@ export function ConfirmDialog({
           </div>
         </form>
       </dialog>
+      </Portal>
     </>
   );
 }

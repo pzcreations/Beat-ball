@@ -1,4 +1,4 @@
-import { Download, LogIn, LogOut, Pencil, ShieldCheck, Trash2, UserPlus, KeyRound, UserCog } from "lucide-react";
+import { ArrowRightLeft, Download, KeyRound, LogIn, LogOut, MessageCircle, Pencil, RotateCcw, Settings, ShieldCheck, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import type { AuditAction, Json } from "@/lib/database.types";
 import { formatNumero, formatRelative, ROLE_LABEL } from "@/lib/format";
@@ -27,13 +27,30 @@ const ICON = {
   "sessao.login": LogIn,
   "sessao.logout": LogOut,
   "dados.exportados": Download,
-} as const;
+  "pessoa.etapa_alterada": ArrowRightLeft,
+  "pessoa.contato_registrado": MessageCircle,
+  "pessoa.recadastrada": RotateCcw,
+  "config.alterada": Settings,
+} as const satisfies Record<AuditAction, unknown>;
+
+const CANAL: Record<string, string> = { whatsapp: "WhatsApp", ligacao: "ligação", presencial: "pessoalmente" };
+const RESULTADO: Record<string, string> = {
+  conversou: "conversou e quer a visita",
+  nao_atendeu: "não atendeu",
+  nao_deseja: "não deseja visita",
+};
+const TABELA: Record<string, string> = {
+  etapas: "as etapas do funil",
+  igrejas: "as igrejas",
+  configuracoes: "a mensagem do WhatsApp",
+};
 
 const FIELD_LABEL: Record<string, string> = {
   nome: "Nome",
   perfil: "Perfil",
   pode_consultar: "Pode consultar todos",
   ativo: "Acesso ativo",
+  igreja: "Igreja",
 };
 
 function fmtValue(key: string, v: Json | undefined) {
@@ -56,6 +73,7 @@ function describe(e: AuditEntry): { title: string; changes: string[] } {
       if (antes.nome !== depois.nome) changes.push(`Nome: ${str(antes.nome)} → ${str(depois.nome)}`);
       if (antes.numero !== depois.numero)
         changes.push(`Número: ${fmtValue("numero", antes.numero)} → ${fmtValue("numero", depois.numero)}`);
+      if (antes.igreja !== depois.igreja) changes.push(`Igreja: ${str(antes.igreja)} → ${str(depois.igreja)}`);
       return { title: `editou o cadastro de ${str(depois.nome)}`, changes };
     }
     case "pessoa.excluida":
@@ -79,6 +97,23 @@ function describe(e: AuditEntry): { title: string; changes: string[] } {
       return { title: "entrou no sistema", changes: [] };
     case "sessao.logout":
       return { title: "saiu do sistema", changes: [] };
+    case "pessoa.etapa_alterada":
+      return {
+        title: `moveu ${str(d.nome)} de etapa`,
+        changes: [`${str(d.de)} → ${str(d.para)}`],
+      };
+    case "pessoa.contato_registrado":
+      return {
+        title: `registrou contato com ${str(d.nome)}`,
+        changes: [`Por ${CANAL[str(d.canal)] ?? str(d.canal)}: ${RESULTADO[str(d.resultado)] ?? str(d.resultado)}`],
+      };
+    case "pessoa.recadastrada":
+      return { title: `cadastrou novamente ${str(d.nome)}`, changes: [] };
+    case "config.alterada":
+      return {
+        title: `alterou ${TABELA[str(d.tabela)] ?? "as configurações"}`,
+        changes: d.nome ? [str(d.nome)] : [],
+      };
     case "dados.exportados":
       return { title: `exportou ${str(d.linhas)} registro(s) em CSV`, changes: [] };
     default:

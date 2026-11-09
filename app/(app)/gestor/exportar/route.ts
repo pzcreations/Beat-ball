@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
     periodo: sp.get("periodo") ?? undefined,
     ordem: sp.get("ordem") ?? undefined,
     responsavel: sp.get("responsavel") || undefined,
+    igreja: sp.get("igreja") || undefined,
+    etapa: sp.get("etapa") || undefined,
   });
 
   let rows;
@@ -55,10 +57,12 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ erro: "Não foi possível registrar a exportação." }, { status: 503 });
 
   const csv = toCsv([
-    ["Nome", "Número", "Cadastrado em", "Responsável", "Última atualização"],
+    ["Nome", "Número", "Igreja", "Etapa", "Cadastrado em", "Responsável", "Última atualização"],
     ...rows.map((r) => [
       r.nome,
       r.numero,
+      r.igreja?.nome ?? "",
+      r.atendimento?.etapa?.nome ?? "",
       formatDateTime(r.created_at),
       r.autor?.full_name ?? "",
       formatDateTime(r.updated_at),

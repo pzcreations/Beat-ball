@@ -12,14 +12,18 @@ type Props = {
   /** Exibe período/ordem/responsável (gestor). */
   advanced?: boolean;
   responsaveis?: { id: string; full_name: string }[];
+  igrejas?: { id: number; nome: string }[];
+  etapas?: { id: number; nome: string }[];
 };
 
 /**
  * Busca e filtros via GET (funcionam sem JavaScript e ficam na URL, o que
  * permite compartilhar/voltar). Os parâmetros são revalidados no servidor.
  */
-export function PessoaFilters({ action, filtros, advanced, responsaveis = [] }: Props) {
-  const hasFilters = Boolean(filtros.q || filtros.periodo || filtros.ordem || filtros.responsavel);
+export function PessoaFilters({ action, filtros, advanced, responsaveis = [], igrejas = [], etapas = [] }: Props) {
+  const hasFilters = Boolean(
+    filtros.q || filtros.periodo || filtros.ordem || filtros.responsavel || filtros.igreja || filtros.etapa,
+  );
 
   return (
     <form action={action} method="get" role="search" className="grid gap-3">
@@ -48,12 +52,30 @@ export function PessoaFilters({ action, filtros, advanced, responsaveis = [] }: 
       </div>
 
       {advanced ? (
-        <details className="group rounded-md md:open:block" open={Boolean(filtros.periodo || filtros.ordem || filtros.responsavel)}>
+        <details className="group rounded-md md:open:block" open={Boolean(filtros.periodo || filtros.ordem || filtros.responsavel || filtros.igreja || filtros.etapa)}>
           <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium text-navy-800 hover:text-navy-900 [&::-webkit-details-marker]:hidden">
             <SlidersHorizontal className="size-4" aria-hidden />
             Filtros e ordenação
           </summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-1.5">
+              <label htmlFor="igreja" className="text-xs font-medium text-muted">Igreja</label>
+              <Select id="igreja" name="igreja" defaultValue={filtros.igreja ? String(filtros.igreja) : ""}>
+                <option value="">Todas</option>
+                {igrejas.map((i) => (
+                  <option key={i.id} value={i.id}>{i.nome}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <label htmlFor="etapa" className="text-xs font-medium text-muted">Etapa</label>
+              <Select id="etapa" name="etapa" defaultValue={filtros.etapa ? String(filtros.etapa) : ""}>
+                <option value="">Todas</option>
+                {etapas.map((e) => (
+                  <option key={e.id} value={e.id}>{e.nome}</option>
+                ))}
+              </Select>
+            </div>
             <div className="grid gap-1.5">
               <label htmlFor="periodo" className="text-xs font-medium text-muted">Período</label>
               <Select id="periodo" name="periodo" defaultValue={filtros.periodo ?? "todos"}>

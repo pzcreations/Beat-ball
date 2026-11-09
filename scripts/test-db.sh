@@ -34,4 +34,12 @@ for f in "$ROOT"/supabase/migrations/*.sql; do
   echo "→ aplicando $(basename "$f")"
   "${PSQL[@]}" -f "$f"
 done
-"${PSQL[@]}" -f "$ROOT/supabase/tests/10_security_test.sql" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /' | grep -vE '^(set_config|registrar_evento)?$|^\{"sub"|^$'
+for t in "$ROOT"/supabase/tests/[1-9]*.sql; do
+  echo "→ $(basename "$t")"
+  "${PSQL[@]}" -f "$t" 2>&1 \
+    | sed 's/^psql:[^ ]* NOTICE:  /  /' \
+    | grep -vE '^$|^\{"(sub|id|etapa_id)"'
+done
+echo "======================================"
+echo "Todos os testes de banco passaram."
+echo "======================================"

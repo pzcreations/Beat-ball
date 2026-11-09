@@ -19,10 +19,11 @@ const TIPOS = {
   usuario: { label: "Usuários", entity: "usuario" },
   sessao: { label: "Acessos", entity: "sessao" },
   exportacao: { label: "Exportações", entity: "exportacao" },
+  configuracao: { label: "Configurações", entity: "configuracao" },
 } as const;
 
 const paramsSchema = z.object({
-  tipo: z.enum(["todos", "pessoa", "usuario", "sessao", "exportacao"]).catch("todos"),
+  tipo: z.enum(["todos", "pessoa", "usuario", "sessao", "exportacao", "configuracao"]).catch("todos"),
   pagina: z.coerce.number().int().min(1).max(10_000).catch(1),
 });
 
@@ -52,7 +53,7 @@ export default async function HistoricoPage({ searchParams }: Props) {
     <div className="grid gap-5">
       <PageHeader title="Histórico de atividades" description="Registro de cadastros, alterações, acessos e exportações." />
 
-      <nav aria-label="Tipo de evento" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+      <nav aria-label="Tipo de evento" className="-mx-4 min-w-0 overflow-x-auto px-4 md:mx-0 md:px-0">
         <ul className="flex w-max gap-2">
           {Object.entries(TIPOS).map(([key, t]) => (
             <li key={key}>
