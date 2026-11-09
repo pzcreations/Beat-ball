@@ -225,6 +225,53 @@ export type Database = {
           },
         ];
       };
+      sistema_config: {
+        Row: {
+          id: boolean;
+          site_url: string | null;
+          cron_secret: string;
+          vapid_public: string | null;
+          vapid_private: string | null;
+          vapid_subject: string | null;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: {
+          site_url?: string | null;
+          vapid_public?: string | null;
+          vapid_private?: string | null;
+          vapid_subject?: string | null;
+        };
+        Relationships: [];
+      };
+      push_assinaturas: {
+        Row: {
+          id: number;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+          last_success_at: string | null;
+        };
+        Insert: { user_id: string; endpoint: string; p256dh: string; auth: string; user_agent?: string | null };
+        Update: { last_success_at?: string | null };
+        Relationships: [];
+      };
+      notificacao_prefs: {
+        Row: {
+          user_id: string;
+          novo_cadastro: boolean;
+          resumo_diario: boolean;
+          lembrete_visita: boolean;
+          alerta_atraso: boolean;
+          updated_at: string;
+        };
+        Insert: { novo_cadastro?: boolean; resumo_diario?: boolean; lembrete_visita?: boolean; alerta_atraso?: boolean };
+        Update: { novo_cadastro?: boolean; resumo_diario?: boolean; lembrete_visita?: boolean; alerta_atraso?: boolean };
+        Relationships: [];
+      };
       configuracoes: {
         Row: { id: boolean; mensagem_whatsapp: string; updated_at: string; updated_by: string | null };
         Insert: never;
@@ -263,6 +310,8 @@ export type Database = {
         Returns: Json;
       };
       funil_resumo: { Args: { p_tz?: string }; Returns: Json };
+      contar_atrasados: { Args: { p_tz?: string }; Returns: number };
+      marcar_envio: { Args: { p_tipo: string; p_dia: string }; Returns: boolean };
       agendar_visita: {
         Args: { p_pessoa_id: string; p_agendada_para: string; p_endereco: string; p_visitante_id: string; p_observacao?: string | null };
         Returns: string;

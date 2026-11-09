@@ -1,7 +1,14 @@
 import { LogOut, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 
+import { salvarPreferenciasAction } from "@/app/actions/notificacoes";
 import { signOutAction } from "@/app/actions/session";
+import { NotificacoesAparelho } from "@/components/notificacoes/ativar";
+import { ActionForm } from "@/components/ui/action-form";
+import { Checkbox } from "@/components/ui/field";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { getVapidPublicKey } from "@/lib/push";
+import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, CardHeader, PageHeader } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
@@ -14,6 +21,30 @@ export const metadata: Metadata = { title: "Minha conta" };
 /** Configurações da conta (ambos os perfis). */
 export default async function ContaPage() {
   const user = await requireUser();
+
+  // Notificações: somente gestores.
+  let publicKey: string | null = null;
+  let prefs = { novo_cadastro: true, resumo_diario: true, lembrete_visita: true, alerta_atraso: true };
+  if (user.role === "gestor") {
+    try {
+      publicKey = await getVapidPublicKey();
+    } catch {
+      publicKey = null;
+    }
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("notificacao_prefs")
+      .select("novo_cadastro, resumo_diario, lembrete_visita, alerta_atraso")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (data) prefs = data;
+  }
+  const OPCOES = [
+    { name: "novo_cadastro", label: "Novo cadastro", desc: "Quando a recepção cadastra (ou reabre) uma pessoa." },
+    { name: "resumo_diario", label: "Resumo do dia (7h)", desc: "Visitas agendadas para hoje." },
+    { name: "alerta_atraso", label: "Atrasos (9h)", desc: "Pessoas que passaram do prazo da etapa." },
+    { name: "lembrete_visita", label: "Lembrete na véspera (19h)", desc: "Suas visitas de amanhã (só para quem fará a visita)." },
+  ] as const;
 
   return (
     <div className="mx-auto grid max-w-2xl gap-5">
@@ -42,6 +73,38 @@ export default async function ContaPage() {
           </div>
         </div>
       </Card>
+
+      {user.role === "gestor" ? (
+        <Card className="animate-enter">
+          <CardHeader title="Notificações" description="Avisos no celular, mesmo com o aplicativo fechado." />
+          <div className="grid gap-5 p-4 md:p-6">
+            {publicKey ? (
+              <NotificacoesAparelho publicKey={publicKey} />
+            ) : (
+              <p className="text-sm text-muted">Notificações indisponíveis no momento.</p>
+            )}
+            <div className="border-t border-line pt-5">
+              <p className="mb-3 text-sm font-medium text-navy-900">O que você quer receber</p>
+              <ActionForm action={salvarPreferenciasAction}>
+                {OPCOES.map((o) => (
+                  <label key={o.name} className="flex cursor-pointer gap-3 rounded-md border border-line p-3.5 hover:bg-azure-50/60">
+                    <Checkbox name={o.name} defaultChecked={prefs[o.name]} className="mt-0.5" />
+                    <span>
+                      <span className="block text-sm font-medium text-navy-900">{o.label}</span>
+                      <span className="block text-[13px] text-muted">{o.desc}</span>
+                    </span>
+                  </label>
+                ))}
+                <div>
+                  <SubmitButton variant="outline" pendingLabel="Salvando…">
+                    Salvar preferências
+                  </SubmitButton>
+                </div>
+              </ActionForm>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="animate-enter">
         <CardHeader title="Alterar senha" description="Por segurança, confirme a senha atual." />

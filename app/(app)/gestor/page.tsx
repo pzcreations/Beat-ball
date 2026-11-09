@@ -14,6 +14,8 @@ import { ETAPA_COR, mapsHref, tempoDesde } from "@/lib/atendimento";
 import { cn } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { formatHora, formatInt, formatVisita } from "@/lib/format";
+import { ConviteNotificacoes } from "@/components/notificacoes/ativar";
+import { getVapidPublicKey } from "@/lib/push";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -57,6 +59,7 @@ export default async function GestorDashboard() {
     listAgenda(startOfZonedDay(env.timezone, -1)),
   ]);
   const inicioHoje = startOfZonedDay(env.timezone, 0);
+  const publicKey = await getVapidPublicKey().catch(() => null);
   const totalAtrasados = funil.reduce((s, f) => s + f.atrasados, 0);
   const funilAberto = funil.filter((f) => f.tipo !== "encerrada");
   const maxFunil = Math.max(1, ...funilAberto.map((f) => f.total));
@@ -76,6 +79,8 @@ export default async function GestorDashboard() {
           </ButtonLink>
         }
       />
+
+      {publicKey ? <ConviteNotificacoes publicKey={publicKey} /> : null}
 
       <section aria-label="Indicadores" className="grid animate-enter grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatCard label="Total de pessoas" value={stats.total} icon={Users} highlight />

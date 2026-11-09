@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import { INSTALL_GATE_SCRIPT, InstallGate } from "@/components/install-gate";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 
 import "./globals.css";
@@ -42,11 +43,16 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Lê o nonce da CSP: garante renderização dinâmica para que todos os
   // scripts do Next.js recebam o nonce desta requisição.
-  await headers();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Exige o app instalado em celulares (texto fixo, sem dados do usuário). */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: INSTALL_GATE_SCRIPT }} />
+      </head>
       <body>
+        <InstallGate />
         <a
           href="#conteudo"
           className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-md focus:bg-navy-900 focus:px-3 focus:py-2 focus:text-sm focus:text-white"

@@ -106,3 +106,8 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Instalação obrigatória no celular (ver components/install-gate.tsx). */
+#instalar-app { display: none; }
+html[data-gate="instalar"] #instalar-app { display: flex; flex-direction: column; }
+html[data-gate="instalar"] body > :not(#instalar-app) { display: none !important; }

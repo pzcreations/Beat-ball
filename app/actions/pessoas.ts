@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 
 import { requireGestor, requireUser } from "@/lib/auth";
 import { friendlyDbError } from "@/lib/errors";
-import { createClient } from "@/lib/supabase/server";
+import { enviarPara, gestoresAtivos } from "@/lib/push";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { ActionState } from "@/lib/utils";
 import { fieldErrors, pessoaSchema, uuidSchema } from "@/lib/validation";
 
@@ -30,7 +32,7 @@ export async function criarPessoaAction(
   _prev: ActionState<PessoaFields>,
   formData: FormData,
 ): Promise<ActionState<PessoaFields>> {
-  await requireUser();
+  const user = await requireUser();
   const raw = readPessoa(formData);
   const parsed = pessoaSchema.safeParse(raw);
   if (!parsed.success) {
@@ -54,8 +56,31 @@ export async function criarPessoaAction(
     };
   }
 
-  const situacao = (data as { situacao?: string } | null)?.situacao ?? "novo";
+  const resposta = data as { situacao?: string; id?: string } | null;
+  const situacao = resposta?.situacao ?? "novo";
   revalidatePath("/", "layout");
+
+  // Avisa os gestores depois de responder (não atrasa a recepção).
+  if ((situacao === "novo" || situacao === "reaberto") && resposta?.id) {
+    const pessoaId = resposta.id;
+    const nome = parsed.data.nome;
+    const igrejaId = parsed.data.igrejaId;
+    after(async () => {
+      try {
+        const admin = createAdminClient();
+        const { data: igreja } = await admin.from("igrejas").select("nome").eq("id", igrejaId).maybeSingle();
+        const gestores = (await gestoresAtivos()).filter((id) => id !== user.id);
+        await enviarPara(gestores, "novo_cadastro", {
+          title: situacao === "novo" ? "Novo cadastro" : "Cadastro reaberto",
+          body: `${nome}${igreja ? ` · ${igreja.nome.replace(/^Igreja Adventista /i, "IASD ")}` : ""}`,
+          url: `/gestor/cadastros/${pessoaId}`,
+          tag: `cadastro-${pessoaId}`,
+        });
+      } catch {
+        console.error("[recepcao] aviso de novo cadastro falhou");
+      }
+    });
+  }
   return {
     status: "success",
     message: MENSAGEM_CADASTRO[situacao] ?? MENSAGEM_CADASTRO.novo,

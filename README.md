@@ -41,6 +41,22 @@ Depois do cadastro, cada pessoa passa por etapas com cores próprias:
 - Encerrar, reabrir ou voltar a etapa cancela a visita pendente automaticamente.
 - O **Painel** mostra as visitas de hoje, e a recepção não vê visitas nem endereços.
 
+### Notificações no celular e instalação obrigatória
+
+- **No celular e no tablet, o sistema só funciona instalado** (ícone na tela inicial). Aberto pelo navegador, mostra apenas as instruções de instalação para iPhone (Safari → Compartilhar → Adicionar à Tela de Início) ou Android (Chrome → Instalar aplicativo). No computador, continua funcionando pelo navegador. Isso é uma regra de uso, não uma barreira de segurança: a segurança continua no servidor e no banco.
+- **Notificações (gestores):** em **Minha conta → Notificações**, toque em **Ativar notificações** em cada aparelho. Cada gestor escolhe o que receber:
+
+  | Aviso | Quando | Quem recebe |
+  |---|---|---|
+  | Novo cadastro (ou reabertura) | Na hora | Gestores (exceto quem cadastrou) |
+  | Resumo das visitas do dia | 7h | Gestores |
+  | Atendimentos atrasados | 9h | Gestores |
+  | Lembrete das visitas de amanhã | 19h | Somente quem fará a visita |
+
+- **iPhone:** iOS 16.4 ou mais recente e app instalado. **Android:** Chrome.
+- **Sem configuração extra:** as chaves de notificação (VAPID) são geradas automaticamente e guardadas no banco, numa tabela que só o servidor acessa. O agendador do Supabase (pg_cron + pg_net) chama o site a cada hora, autenticado por um segredo também gerado no banco. O endereço do site é registrado na primeira vez que um gestor ativa as notificações. Para trocar de domínio depois, rode no SQL Editor:
+  `update public.sistema_config set site_url = 'https://novo-endereco';`
+
 ---
 
 ## Arquitetura de segurança
@@ -85,7 +101,8 @@ Outras proteções:
 2. Em **SQL Editor**, execute **na ordem** cada arquivo da pasta [`supabase/migrations`](supabase/migrations), um de cada vez (cole o conteúdo e clique em **Run**):
    1. `20261106000000_recepcao_init.sql`: tabelas, segurança e auditoria;
    2. `20261110000000_atendimento_pastoral.sql`: igrejas e acompanhamento pastoral;
-   3. `20261112000000_visitas.sql`: agendamento das visitas.
+   3. `20261112000000_visitas.sql`: agendamento das visitas;
+   4. `20261114000000_notificacoes.sql`: notificações no celular (ativa pg_cron e pg_net).
 
    Rode apenas os arquivos que ainda não foram executados. Cadastros existentes entram automaticamente em "Aguardando contato".
    - Se preferir a CLI: `npx supabase link --project-ref <ref>` e depois `npx supabase db push`.
@@ -175,7 +192,7 @@ npm run build       # build de produção
 npm run test:db     # migration + RLS num PostgreSQL local descartável
 ```
 
-`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica as migrations e executa 139 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial; igreja obrigatória; regras de transição do funil; reabertura em cadastro repetido; recepção vendo só a etapa de quem cadastrou; proteção das etapas essenciais; agendamento, reagendamento e registro de visitas; cancelamento automático da visita ao encerrar; recepção sem acesso a endereços.
+`test:db` precisa do PostgreSQL 15+ instalado localmente (`initdb`, `pg_ctl`, `psql` e as extensões *contrib*). O script sobe um banco temporário com uma simulação mínima do ambiente Supabase, aplica as migrations e executa 157 verificações. Entre elas: anônimo sem acesso; recepção sem poder editar, excluir, ler o histórico, se promover ou forjar o responsável; usuário inativo bloqueado; auditoria com antes/depois; proteção do último gestor; integridade referencial; igreja obrigatória; regras de transição do funil; reabertura em cadastro repetido; recepção vendo só a etapa de quem cadastrou; proteção das etapas essenciais; agendamento, reagendamento e registro de visitas; cancelamento automático da visita ao encerrar; recepção sem acesso a endereços; segredos do sistema inacessíveis aos usuários; cada gestor gerencia só os próprios aparelhos e preferências.
 
 ---
 
