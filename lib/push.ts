@@ -33,21 +33,25 @@ export async function getVapid(): Promise<Vapid> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("sistema_config")
-    .select("vapid_public, vapid_private, vapid_subject")
+    .select("vapid_public, vapid_private, vapid_subject, site_url")
     .eq("id", true)
     .single();
   if (error || !data) throw new Error("Configuração do sistema indisponível.");
 
   if (data.vapid_public && data.vapid_private) {
-    cache = { publicKey: data.vapid_public, privateKey: data.vapid_private, subject: data.vapid_subject ?? "mailto:contato@example.com" };
-    return cache;
+    // Identificação do remetente: o endereço do próprio site (aceito pela
+    // Apple e pelo Google). Endereços genéricos podem ser recusados.
+    const subject = data.site_url ?? (data.vapid_subject?.includes("example.com") ? null : data.vapid_subject);
+    const v = { publicKey: data.vapid_public, privateKey: data.vapid_private, subject: subject ?? "mailto:recepcao@recepcao.app" };
+    if (data.site_url) cache = v; // só guarda em cache quando o endereço já é conhecido
+    return v;
   }
 
   const keys = webpush.generateVAPIDKeys();
   // Grava só se ainda estiver vazio (evita corrida entre instâncias).
   await admin
     .from("sistema_config")
-    .update({ vapid_public: keys.publicKey, vapid_private: keys.privateKey, vapid_subject: "mailto:contato@example.com" })
+    .update({ vapid_public: keys.publicKey, vapid_private: keys.privateKey, vapid_subject: null })
     .eq("id", true)
     .is("vapid_public", null);
   cache = null;
@@ -62,8 +66,11 @@ export async function getVapidPublicKey() {
  * Envia para os usuários informados, respeitando as preferências de cada um.
  * Assinaturas expiradas (404/410) são removidas automaticamente.
  */
-export async function enviarPara(userIds: string[], tipo: TipoNotificacao, n: Notificacao) {
-  if (userIds.length === 0) return { enviados: 0 };
+export type ResultadoEnvio = { enviados: number; aparelhos: number; falhas: string[] };
+
+export async function enviarPara(userIds: string[], tipo: TipoNotificacao, n: Notificacao): Promise<ResultadoEnvio> {
+  const vazio: ResultadoEnvio = { enviados: 0, aparelhos: 0, falhas: [] };
+  if (userIds.length === 0) return vazio;
   const admin = createAdminClient();
   let destinatarios = [...new Set(userIds)];
 
@@ -74,17 +81,18 @@ export async function enviarPara(userIds: string[], tipo: TipoNotificacao, n: No
     );
     destinatarios = destinatarios.filter((id) => !desligados.has(id));
   }
-  if (destinatarios.length === 0) return { enviados: 0 };
+  if (destinatarios.length === 0) return vazio;
 
   const { data: subs, error } = await admin
     .from("push_assinaturas")
     .select("id, endpoint, p256dh, auth")
     .in("user_id", destinatarios);
-  if (error || !subs?.length) return { enviados: 0 };
+  if (error || !subs?.length) return vazio;
 
   const vapid = await getVapid();
   const payload = JSON.stringify({ ...n, tag: n.tag ?? tipo });
   let enviados = 0;
+  const falhas: string[] = [];
 
   await Promise.all(
     subs.map(async (s) => {
@@ -101,16 +109,19 @@ export async function enviarPara(userIds: string[], tipo: TipoNotificacao, n: No
         enviados++;
         await admin.from("push_assinaturas").update({ last_success_at: new Date().toISOString() }).eq("id", s.id);
       } catch (e) {
-        const status = (e as { statusCode?: number }).statusCode;
+        const err = e as { statusCode?: number; body?: string };
+        const status = err.statusCode;
+        const motivo = `${status ?? "rede"}${err.body ? ` ${String(err.body).slice(0, 120)}` : ""}`;
+        falhas.push(`${new URL(s.endpoint).host}: ${motivo}`);
         if (status === 404 || status === 410) {
           await admin.from("push_assinaturas").delete().eq("id", s.id);
         } else {
-          console.error(`[recepcao] push falhou: ${status ?? "erro de rede"}`);
+          console.error(`[recepcao] push falhou: ${motivo}`);
         }
       }
     }),
   );
-  return { enviados };
+  return { enviados, aparelhos: subs.length, falhas };
 }
 
 /** IDs dos gestores ativos. */

@@ -87,13 +87,34 @@ export async function salvarPreferenciasAction(_p: ActionState, fd: FormData): P
 /** Envia uma notificação de teste para os aparelhos deste gestor. */
 export async function enviarTesteAction(): Promise<ActionState> {
   const gestor = await requireGestor();
-  const { enviados } = await enviarPara([gestor.id], "teste", {
-    title: "Recepção",
-    body: "Notificações funcionando neste aparelho. 🙏",
-    url: "/gestor",
-    tag: "teste",
-  });
-  return enviados > 0
-    ? { status: "success", message: "Notificação de teste enviada.", at: Date.now() }
-    : { status: "error", message: "Nenhum aparelho com notificações ativas.", at: Date.now() };
+  let r;
+  try {
+    r = await enviarPara([gestor.id], "teste", {
+      title: "Recepção",
+      body: "Notificações funcionando neste aparelho. 🙏",
+      url: "/gestor",
+      tag: "teste",
+    });
+  } catch {
+    return { status: "error", message: "Falha ao preparar o envio. Tente novamente.", at: Date.now() };
+  }
+  if (r.aparelhos === 0) {
+    return {
+      status: "error",
+      message: "Nenhum aparelho ativo encontrado para você. Toque em Desativar (se aparecer) e depois em Ativar notificações.",
+      at: Date.now(),
+    };
+  }
+  if (r.enviados === 0) {
+    return {
+      status: "error",
+      message: `O serviço de notificações recusou o envio (${r.falhas[0] ?? "motivo desconhecido"}). Desative e ative novamente neste aparelho.`,
+      at: Date.now(),
+    };
+  }
+  return {
+    status: "success",
+    message: `Teste enviado para ${r.enviados} aparelho(s). Se não aparecer, veja as permissões de notificação do celular.`,
+    at: Date.now(),
+  };
 }
