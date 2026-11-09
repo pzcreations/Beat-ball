@@ -1,0 +1,86 @@
+# Backup semanal do banco de dados (Supabase) — gratuito.
+#
+# - Gera uma cópia completa dos dados (schemas public e auth) com pg_dump.
+# - CRIPTOGRAFA a cópia com AES-256 usando a senha BACKUP_PASSPHRASE antes de
+#   salvar. Sem essa senha, o arquivo é ilegível — inclusive porque este
+#   repositório pode ser público.
+# - Guarda o arquivo criptografado como "artifact" do GitHub por 90 dias
+#   (não fica no código do repositório).
+#
+# Segredos necessários (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     — string de conexão "Session pooler" do Supabase
+#   BACKUP_PASSPHRASE   — senha longa para criptografar os backups
+#
+# Como restaurar: veja docs/BACKUP.md
+
+name: Backup do banco
+
+on:
+  schedule:
+    - cron: "0 6 * * 0" # domingo, 06:00 UTC = 03:00 em São Paulo
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-banco
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Verificar segredos
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Configure os segredos SUPABASE_DB_URL e BACKUP_PASSPHRASE (veja docs/BACKUP.md)."
+            exit 1
+          fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 16 ]; then
+            echo "::error::BACKUP_PASSPHRASE deve ter pelo menos 16 caracteres."
+            exit 1
+          fi
+
+      - name: Gerar backup (pg_dump)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/backup"
+          # Cliente PostgreSQL 17 (compatível com o servidor do Supabase).
+          docker run --rm \
+            -e DB_URL="$SUPABASE_DB_URL" \
+            -v "$RUNNER_TEMP/backup:/out" \
+            postgres:17 \
+            sh -c 'pg_dump "$DB_URL" --format=custom --no-owner --no-privileges --schema=public --schema=auth --file=/out/recepcao.dump'
+          ls -l "$RUNNER_TEMP/backup"
+          test -s "$RUNNER_TEMP/backup/recepcao.dump"
+
+      - name: Criptografar (AES-256)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/backup"
+          DATA="$(TZ=America/Sao_Paulo date +%Y-%m-%d)"
+          echo "DATA=$DATA" >> "$GITHUB_ENV"
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            --output "recepcao-$DATA.dump.gpg" recepcao.dump
+          # Remove a cópia sem criptografia imediatamente.
+          shred -u recepcao.dump
+          ls -l
+
+      - name: Guardar backup criptografado (90 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-recepcao-${{ env.DATA }}
+          path: ${{ runner.temp }}/backup/recepcao-${{ env.DATA }}.dump.gpg
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0

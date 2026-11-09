@@ -228,9 +228,14 @@ scripts/                 test-db.sh e geração de ícones
 
 ---
 
+## Backup
+
+Toda semana, o GitHub Actions gera um **backup completo e criptografado** do banco, guardado por 90 dias. A configuração (dois segredos no GitHub) e a restauração estão em [`docs/BACKUP.md`](docs/BACKUP.md).
+
 ## Observações de operação
 
 - **Usuários não são apagados, são desativados.** Quem fez cadastros continua vinculado a eles (integridade referencial), e a desativação corta o acesso imediatamente.
 - **Limite de tentativas de login:** fica em memória, por instância. Com várias instâncias, troque `lib/rate-limit.ts` por um armazenamento compartilhado (ex.: Redis/Upstash).
+- **Backup:** veja [`docs/BACKUP.md`](docs/BACKUP.md). A exportação CSV em *Cadastros* continua disponível para planilhas.
 - **Retenção (LGPD):** defina uma política de retenção para `pessoas` e `audit_log` conforme a finalidade do tratamento. A exclusão pelo gestor é registrada no histórico.
 - **Tipos do banco:** `lib/database.types.ts` espelha a migration. Se o esquema mudar, regenere com `npx supabase gen types typescript --project-id <id>`.
