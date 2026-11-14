@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * página e ação, e novamente no banco de dados pelas políticas RLS.
  */
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/", "/painel", "/cliente"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -24,9 +24,9 @@ function buildCsp(nonce: string) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     // Estilos inline são de baixo risco e usados pelo próprio Next.js.
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
     "img-src 'self' data: blob:",
-    "font-src 'self'",
+    "font-src 'self' fonts.gstatic.com",
     // O navegador só conversa com este servidor (nunca diretamente com o Supabase).
     `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
     "manifest-src 'self'",
