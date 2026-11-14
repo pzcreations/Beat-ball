@@ -2,8 +2,11 @@
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { AC_PARTS, CATEGORY_COLORS, type SelectedPart } from "@/lib/ac-parts";
-import { RotateCw, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { RotateCw, ZoomIn, ZoomOut, Maximize2, Loader2 } from "lucide-react";
 
 interface CarViewerProps {
   selectedParts: SelectedPart[];
@@ -27,205 +30,95 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
   } | null>(null);
   const [hoveredPart, setHoveredPart] = useState<string | null>(null);
   const [autoRotate, setAutoRotate] = useState(true);
+  const [modelLoading, setModelLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
   const rafRef = useRef<number>(0);
 
   const selectedIds = new Set(selectedParts.map((p) => p.id));
 
-  const buildCar = useCallback((scene: THREE.Scene): { carGroup: THREE.Group; hotspots: Map<string, THREE.Mesh> } => {
-    const carGroup = new THREE.Group();
-    const hotspots = new Map<string, THREE.Mesh>();
+  const addHotspots = useCallback(
+    (
+      carGroup: THREE.Group,
+      modelBounds: { min: THREE.Vector3; max: THREE.Vector3; size: THREE.Vector3; center: THREE.Vector3 },
+    ): Map<string, THREE.Mesh> => {
+      const hotspots = new Map<string, THREE.Mesh>();
+      const { size, center } = modelBounds;
+      const carLength = size.x;
+      const carHeight = size.y;
+      const carWidth = size.z;
 
-    const bodyMat = new THREE.MeshPhysicalMaterial({
-      color: 0x1a1a2e,
-      metalness: 0.9,
-      roughness: 0.2,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-    });
+      // Map AC part positions relative to the car bounding box
+      // x = length axis (front=negative, rear=positive in our setup)
+      // y = height
+      // z = width (left/right)
+      const partPositions: Record<string, { x: number; y: number; z: number }> = {
+        "compressor": { x: -carLength * 0.25, y: carHeight * 0.25, z: carWidth * 0.2 },
+        "condensador": { x: -carLength * 0.42, y: carHeight * 0.25, z: 0 },
+        "evaporador": { x: -carLength * 0.05, y: carHeight * 0.5, z: 0 },
+        "valvula-expansao": { x: -carLength * 0.08, y: carHeight * 0.4, z: carWidth * 0.15 },
+        "filtro-secador": { x: -carLength * 0.32, y: carHeight * 0.35, z: -carWidth * 0.18 },
+        "embreagem-compressor": { x: -carLength * 0.28, y: carHeight * 0.18, z: carWidth * 0.25 },
+        "motor-ventilador": { x: -carLength * 0.02, y: carHeight * 0.45, z: -carWidth * 0.1 },
+        "mangueiras": { x: -carLength * 0.18, y: carHeight * 0.3, z: -carWidth * 0.12 },
+        "pressostato": { x: -carLength * 0.3, y: carHeight * 0.4, z: carWidth * 0.1 },
+        "ventoinha-condensador": { x: -carLength * 0.4, y: carHeight * 0.2, z: carWidth * 0.05 },
+        "gas-refrigerante": { x: -carLength * 0.2, y: carHeight * 0.3, z: carWidth * 0.2 },
+        "painel-controle": { x: 0, y: carHeight * 0.55, z: 0 },
+      };
 
-    // Main body
-    const bodyGeo = new THREE.BoxGeometry(2.0, 0.6, 4.2, 4, 2, 4);
-    const positions = bodyGeo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      const z = positions.getZ(i);
-      const absX = Math.abs(x);
-      if (absX > 0.8) {
-        positions.setY(i, y - (absX - 0.8) * 0.15);
+      for (const part of AC_PARTS) {
+        const color = CATEGORY_COLORS[part.category];
+        const pos = partPositions[part.id] ?? { x: 0, y: 0.3, z: 0 };
+
+        // Hotspot sphere
+        const radius = carLength * 0.02;
+        const hotspotGeo = new THREE.SphereGeometry(radius, 16, 16);
+        const hotspotMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(color),
+          transparent: true,
+          opacity: 0.8,
+          depthTest: false,
+        });
+        const hotspot = new THREE.Mesh(hotspotGeo, hotspotMat);
+        hotspot.position.set(pos.x, pos.y, pos.z);
+        hotspot.userData = { partId: part.id };
+        hotspot.renderOrder = 999;
+        carGroup.add(hotspot);
+        hotspots.set(part.id, hotspot);
+
+        // Pulsing ring
+        const ringGeo = new THREE.RingGeometry(radius * 1.3, radius * 1.6, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(color),
+          transparent: true,
+          opacity: 0.4,
+          side: THREE.DoubleSide,
+          depthTest: false,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(hotspot.position);
+        ring.renderOrder = 998;
+        carGroup.add(ring);
       }
-      if (z > 1.6) {
-        positions.setX(i, x * (1 - (z - 1.6) * 0.15));
-        positions.setY(i, y - (z - 1.6) * 0.08);
-      }
-      if (z < -1.6) {
-        positions.setX(i, x * (1 - (-z - 1.6) * 0.1));
-      }
-    }
-    bodyGeo.computeVertexNormals();
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.5;
-    carGroup.add(body);
 
-    // Cabin
-    const cabinGeo = new THREE.BoxGeometry(1.7, 0.55, 2.0, 3, 2, 3);
-    const cabinPos = cabinGeo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < cabinPos.count; i++) {
-      const x = cabinPos.getX(i);
-      const y = cabinPos.getY(i);
-      const z = cabinPos.getZ(i);
-      if (y > 0.2) {
-        cabinPos.setX(i, x * 0.85);
-        if (z > 0.6) cabinPos.setZ(i, z - 0.15);
-        if (z < -0.6) cabinPos.setZ(i, z + 0.1);
-      }
-    }
-    cabinGeo.computeVertexNormals();
-    const cabinMat = new THREE.MeshPhysicalMaterial({
-      color: 0x111122,
-      metalness: 0.7,
-      roughness: 0.3,
-      clearcoat: 0.5,
-    });
-    const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-    cabin.position.set(0, 1.05, -0.15);
-    carGroup.add(cabin);
-
-    // Windshield
-    const windshieldMat = new THREE.MeshPhysicalMaterial({
-      color: 0x88ccff,
-      metalness: 0.1,
-      roughness: 0.05,
-      transparent: true,
-      opacity: 0.3,
-      transmission: 0.6,
-    });
-    const windshieldGeo = new THREE.PlaneGeometry(1.4, 0.5);
-    const windshield = new THREE.Mesh(windshieldGeo, windshieldMat);
-    windshield.position.set(0, 1.1, 0.85);
-    windshield.rotation.x = -0.45;
-    carGroup.add(windshield);
-
-    // Rear window
-    const rearWindow = new THREE.Mesh(windshieldGeo, windshieldMat);
-    rearWindow.position.set(0, 1.1, -1.1);
-    rearWindow.rotation.x = 0.35;
-    carGroup.add(rearWindow);
-
-    // Wheels
-    const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.18, 24);
-    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.4 });
-    const rimGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.2, 12);
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 1, roughness: 0.2 });
-
-    const wheelPositions = [
-      { x: -1.05, y: 0.3, z: 1.2 },
-      { x: 1.05, y: 0.3, z: 1.2 },
-      { x: -1.05, y: 0.3, z: -1.2 },
-      { x: 1.05, y: 0.3, z: -1.2 },
-    ];
-
-    for (const pos of wheelPositions) {
-      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-      wheel.position.set(pos.x, pos.y, pos.z);
-      wheel.rotation.z = Math.PI / 2;
-      carGroup.add(wheel);
-      const rim = new THREE.Mesh(rimGeo, rimMat);
-      rim.position.set(pos.x, pos.y, pos.z);
-      rim.rotation.z = Math.PI / 2;
-      carGroup.add(rim);
-    }
-
-    // Headlights
-    const headlightMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.5,
-    });
-    const headlightGeo = new THREE.SphereGeometry(0.1, 8, 8);
-    const hl1 = new THREE.Mesh(headlightGeo, headlightMat);
-    hl1.position.set(-0.65, 0.55, 2.1);
-    hl1.scale.set(1, 0.6, 0.4);
-    carGroup.add(hl1);
-    const hl2 = new THREE.Mesh(headlightGeo, headlightMat);
-    hl2.position.set(0.65, 0.55, 2.1);
-    hl2.scale.set(1, 0.6, 0.4);
-    carGroup.add(hl2);
-
-    // Tail lights
-    const tailMat = new THREE.MeshStandardMaterial({
-      color: 0xff2222,
-      emissive: 0xff0000,
-      emissiveIntensity: 0.4,
-    });
-    const tl1 = new THREE.Mesh(headlightGeo, tailMat);
-    tl1.position.set(-0.65, 0.55, -2.1);
-    tl1.scale.set(1, 0.6, 0.4);
-    carGroup.add(tl1);
-    const tl2 = new THREE.Mesh(headlightGeo, tailMat);
-    tl2.position.set(0.65, 0.55, -2.1);
-    tl2.scale.set(1, 0.6, 0.4);
-    carGroup.add(tl2);
-
-    // Grille
-    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.3 });
-    const grilleGeo = new THREE.BoxGeometry(1.3, 0.25, 0.05);
-    const grille = new THREE.Mesh(grilleGeo, grilleMat);
-    grille.position.set(0, 0.4, 2.1);
-    carGroup.add(grille);
-
-    // Ground shadow
-    const shadowGeo = new THREE.PlaneGeometry(3, 5.5);
-    const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.3,
-    });
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.01;
-    carGroup.add(shadow);
-
-    // AC Component hotspots
-    for (const part of AC_PARTS) {
-      const color = CATEGORY_COLORS[part.category];
-      const hotspotGeo = new THREE.SphereGeometry(0.12, 16, 16);
-      const hotspotMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(color),
-        transparent: true,
-        opacity: 0.7,
-      });
-      const hotspot = new THREE.Mesh(hotspotGeo, hotspotMat);
-      hotspot.position.set(part.position.x, part.position.y, part.position.z);
-      hotspot.userData = { partId: part.id };
-      carGroup.add(hotspot);
-      hotspots.set(part.id, hotspot);
-
-      // Ring around hotspot
-      const ringGeo = new THREE.RingGeometry(0.14, 0.17, 32);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(color),
-        transparent: true,
-        opacity: 0.4,
-        side: THREE.DoubleSide,
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.position.copy(hotspot.position);
-      carGroup.add(ring);
-    }
-
-    scene.add(carGroup);
-    return { carGroup, hotspots };
-  }, []);
+      return hotspots;
+    },
+    [],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0a0a, 0.08);
+    scene.fog = new THREE.FogExp2(0x0a0a0a, 0.04);
 
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(
+      40,
+      container.clientWidth / container.clientHeight,
+      0.01,
+      200,
+    );
     camera.position.set(4, 2.5, 4);
     camera.lookAt(0, 0.5, 0);
 
@@ -237,11 +130,11 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
     container.appendChild(renderer.domElement);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+    const ambientLight = new THREE.AmbientLight(0x404060, 0.8);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    keyLight.position.set(5, 8, 5);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    keyLight.position.set(5, 10, 5);
     scene.add(keyLight);
 
     const fillLight = new THREE.DirectionalLight(0x4488ff, 0.4);
@@ -249,14 +142,107 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
     scene.add(fillLight);
 
     const rimLight = new THREE.DirectionalLight(0x00f0ff, 0.3);
-    rimLight.position.set(0, 5, -8);
+    rimLight.position.set(0, 6, -10);
     scene.add(rimLight);
 
+    const bottomLight = new THREE.HemisphereLight(0x222244, 0x111111, 0.3);
+    scene.add(bottomLight);
+
     // Ground grid
-    const gridHelper = new THREE.GridHelper(12, 24, 0x1a1a3a, 0x111125);
+    const gridHelper = new THREE.GridHelper(20, 40, 0x1a1a3a, 0x111125);
     scene.add(gridHelper);
 
-    const { carGroup, hotspots } = buildCar(scene);
+    // Ground reflection
+    const groundGeo = new THREE.PlaneGeometry(20, 20);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a0e,
+      metalness: 0.7,
+      roughness: 0.35,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.01;
+    scene.add(ground);
+
+    const carGroup = new THREE.Group();
+    scene.add(carGroup);
+
+    // Load GLTF model
+    const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath(
+      "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/",
+    );
+    loader.setDRACOLoader(dracoLoader);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+
+    let hotspots = new Map<string, THREE.Mesh>();
+
+    loader.load(
+      "/models/creta.glb",
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Compute bounding box
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Center model and place on ground
+        model.position.x = -center.x;
+        model.position.y = -box.min.y;
+        model.position.z = -center.z;
+
+        // Improve materials for dark theme
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat.isMeshStandardMaterial) {
+              mat.envMapIntensity = 1.5;
+              mat.needsUpdate = true;
+            }
+          }
+        });
+
+        carGroup.add(model);
+
+        // Recalculate bounds after positioning
+        const newBox = new THREE.Box3().setFromObject(carGroup);
+        const newSize = newBox.getSize(new THREE.Vector3());
+        const newCenter = newBox.getCenter(new THREE.Vector3());
+
+        // Add hotspots relative to model bounds
+        hotspots = addHotspots(carGroup, {
+          min: newBox.min,
+          max: newBox.max,
+          size: newSize,
+          center: newCenter,
+        });
+
+        // Adjust camera distance based on model size
+        const maxDim = Math.max(newSize.x, newSize.y, newSize.z);
+        const cameraDistance = maxDim * 1.8;
+        state.targetZoom = cameraDistance;
+        camera.position.set(cameraDistance * 0.7, cameraDistance * 0.4, cameraDistance * 0.7);
+        camera.lookAt(0, newSize.y * 0.3, 0);
+
+        // Update state with hotspots
+        state.hotspots = hotspots;
+
+        setModelLoading(false);
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          setLoadProgress(Math.round((progress.loaded / progress.total) * 100));
+        }
+      },
+      (error) => {
+        console.error("Error loading model:", error);
+        setModelLoading(false);
+      },
+    );
 
     const state = {
       scene,
@@ -269,7 +255,7 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
       lastMouse: { x: 0, y: 0 },
       rotationY: 0,
       rotationX: 0,
-      targetZoom: 5.5,
+      targetZoom: 6,
     };
     sceneRef.current = state;
 
@@ -282,7 +268,8 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
-      const meshes = Array.from(hotspots.values());
+      const meshes = Array.from(state.hotspots.values());
+      if (meshes.length === 0) return null;
       const intersects = raycaster.intersectObjects(meshes);
       if (intersects.length > 0) {
         return intersects[0]!.object.userData.partId as string;
@@ -326,14 +313,17 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
     function onWheel(event: WheelEvent) {
       event.preventDefault();
       state.targetZoom += event.deltaY * 0.005;
-      state.targetZoom = Math.max(3, Math.min(10, state.targetZoom));
+      state.targetZoom = Math.max(2, Math.min(15, state.targetZoom));
     }
 
     // Touch events
     let touchStart = { x: 0, y: 0 };
     function onTouchStart(event: TouchEvent) {
       if (event.touches.length === 1) {
-        touchStart = { x: event.touches[0]!.clientX, y: event.touches[0]!.clientY };
+        touchStart = {
+          x: event.touches[0]!.clientX,
+          y: event.touches[0]!.clientY,
+        };
         state.lastMouse = { ...touchStart };
         state.mouseDown = true;
       }
@@ -346,7 +336,10 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
         state.rotationY += dx * 0.005;
         state.rotationX += dy * 0.003;
         state.rotationX = Math.max(-0.5, Math.min(0.5, state.rotationX));
-        state.lastMouse = { x: event.touches[0]!.clientX, y: event.touches[0]!.clientY };
+        state.lastMouse = {
+          x: event.touches[0]!.clientX,
+          y: event.touches[0]!.clientY,
+        };
       }
     }
 
@@ -357,13 +350,17 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
         const dy = Math.abs(event.changedTouches[0]!.clientY - touchStart.y);
         if (dx < 10 && dy < 10) {
           const rect = container!.getBoundingClientRect();
-          mouse.x = ((event.changedTouches[0]!.clientX - rect.left) / rect.width) * 2 - 1;
-          mouse.y = -((event.changedTouches[0]!.clientY - rect.top) / rect.height) * 2 + 1;
+          mouse.x =
+            ((event.changedTouches[0]!.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y =
+            -((event.changedTouches[0]!.clientY - rect.top) / rect.height) * 2 + 1;
           raycaster.setFromCamera(mouse, camera);
-          const meshes = Array.from(hotspots.values());
-          const intersects = raycaster.intersectObjects(meshes);
-          if (intersects.length > 0) {
-            onPartToggle(intersects[0]!.object.userData.partId as string);
+          const meshes = Array.from(state.hotspots.values());
+          if (meshes.length > 0) {
+            const intersects = raycaster.intersectObjects(meshes);
+            if (intersects.length > 0) {
+              onPartToggle(intersects[0]!.object.userData.partId as string);
+            }
           }
         }
       }
@@ -391,27 +388,25 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
       carGroup.rotation.y = state.rotationY;
       carGroup.rotation.x = state.rotationX;
 
-      // Camera zoom
       const currentDist = camera.position.length();
       const targetDist = state.targetZoom;
       const newDist = currentDist + (targetDist - currentDist) * 0.05;
       camera.position.normalize().multiplyScalar(newDist);
       camera.lookAt(0, 0.5, 0);
 
-      // Animate hotspots
-      for (const [partId, mesh] of hotspots) {
+      for (const [partId, mesh] of state.hotspots) {
         const mat = mesh.material as THREE.MeshBasicMaterial;
         const isSelected = selectedIds.has(partId);
         const isHovered = hoveredPart === partId;
 
-        const pulse = Math.sin(time * 3) * 0.03;
-        mesh.scale.setScalar(isSelected ? 1.4 + pulse : isHovered ? 1.2 : 1.0);
-        mat.opacity = isSelected ? 1.0 : isHovered ? 0.9 : 0.6;
+        const pulse = Math.sin(time * 3) * 0.02;
+        mesh.scale.setScalar(isSelected ? 1.5 + pulse : isHovered ? 1.25 : 1.0);
+        mat.opacity = isSelected ? 1.0 : isHovered ? 0.9 : 0.65;
 
         if (isSelected) {
           mat.color.setHex(0x00f0ff);
         } else {
-          const part = AC_PARTS.find(p => p.id === partId);
+          const part = AC_PARTS.find((p) => p.id === partId);
           if (part) mat.color.set(CATEGORY_COLORS[part.category]);
         }
       }
@@ -420,7 +415,6 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
     }
     animate();
 
-    // Resize
     function onResize() {
       if (!container) return;
       camera.aspect = container.clientWidth / container.clientHeight;
@@ -439,15 +433,15 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
       container.removeEventListener("touchstart", onTouchStart);
       container.removeEventListener("touchmove", onTouchMove);
       container.removeEventListener("touchend", onTouchEnd);
+      dracoLoader.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildCar, onPartToggle]);
+  }, [addHotspots, onPartToggle]);
 
-  // Update hotspot visuals when selection changes
   useEffect(() => {
     if (!sceneRef.current) return;
     const { hotspots } = sceneRef.current;
@@ -455,9 +449,9 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
       const mat = mesh.material as THREE.MeshBasicMaterial;
       if (selectedIds.has(partId)) {
         mat.color.setHex(0x00f0ff);
-        mesh.scale.setScalar(1.4);
+        mesh.scale.setScalar(1.5);
       } else {
-        const part = AC_PARTS.find(p => p.id === partId);
+        const part = AC_PARTS.find((p) => p.id === partId);
         if (part) mat.color.set(CATEGORY_COLORS[part.category]);
         mesh.scale.setScalar(1.0);
       }
@@ -474,13 +468,13 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
 
   function zoomIn() {
     if (sceneRef.current) {
-      sceneRef.current.targetZoom = Math.max(3, sceneRef.current.targetZoom - 1);
+      sceneRef.current.targetZoom = Math.max(2, sceneRef.current.targetZoom - 1);
     }
   }
 
   function zoomOut() {
     if (sceneRef.current) {
-      sceneRef.current.targetZoom = Math.min(10, sceneRef.current.targetZoom + 1);
+      sceneRef.current.targetZoom = Math.min(15, sceneRef.current.targetZoom + 1);
     }
   }
 
@@ -488,21 +482,41 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
     if (sceneRef.current) {
       sceneRef.current.rotationY = 0;
       sceneRef.current.rotationX = 0;
-      sceneRef.current.targetZoom = 5.5;
+      sceneRef.current.targetZoom = 6;
       sceneRef.current.autoRotate = true;
       setAutoRotate(true);
     }
   }
 
-  const hoveredPartData = hoveredPart ? AC_PARTS.find((p) => p.id === hoveredPart) : null;
+  const hoveredPartData = hoveredPart
+    ? AC_PARTS.find((p) => p.id === hoveredPart)
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="relative overflow-hidden rounded-xl border border-border bg-dark-900">
         <div ref={containerRef} className="aspect-[16/10] w-full" />
 
+        {/* Loading overlay */}
+        {modelLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-dark-900/90 backdrop-blur-sm z-10">
+            <Loader2 className="h-8 w-8 animate-spin text-neon-cyan mb-3" />
+            <p className="text-sm text-text-primary font-medium">
+              Carregando modelo 3D...
+            </p>
+            {loadProgress > 0 && (
+              <div className="mt-2 w-48 h-1 rounded-full bg-dark-700 overflow-hidden">
+                <div
+                  className="h-full bg-neon-cyan transition-all duration-300 rounded-full"
+                  style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Controls */}
-        <div className="absolute right-3 top-3 flex flex-col gap-1.5">
+        <div className="absolute right-3 top-3 flex flex-col gap-1.5 z-20">
           <button
             onClick={toggleAutoRotate}
             className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
@@ -510,7 +524,7 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
                 ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30"
                 : "bg-dark-700/80 text-text-secondary border border-border hover:text-text-primary"
             }`}
-            title="Rotação automática"
+            title="Rotacao automatica"
           >
             <RotateCw className="h-4 w-4" />
           </button>
@@ -531,7 +545,7 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
           <button
             onClick={resetView}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-dark-700/80 text-text-secondary border border-border hover:text-text-primary transition-all"
-            title="Resetar visualização"
+            title="Resetar visualizacao"
           >
             <Maximize2 className="h-4 w-4" />
           </button>
@@ -539,20 +553,31 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
 
         {/* Hovered part tooltip */}
         {hoveredPartData && (
-          <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg glass px-3 py-2 animate-[fade-in_150ms]">
-            <p className="text-sm font-semibold text-text-primary">{hoveredPartData.name}</p>
-            <p className="text-xs text-text-secondary">{hoveredPartData.description}</p>
+          <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg glass px-3 py-2 animate-[fade-in_150ms] z-20">
+            <p className="text-sm font-semibold text-text-primary">
+              {hoveredPartData.name}
+            </p>
+            <p className="text-xs text-text-secondary">
+              {hoveredPartData.description}
+            </p>
           </div>
         )}
 
         {/* Legend */}
-        <div className="absolute bottom-3 right-3 rounded-lg glass px-3 py-2">
-          <p className="mb-1.5 text-[10px] uppercase tracking-widest text-text-muted">Categorias</p>
+        <div className="absolute bottom-3 right-3 rounded-lg glass px-3 py-2 z-20">
+          <p className="mb-1.5 text-[10px] uppercase tracking-widest text-text-muted">
+            Categorias
+          </p>
           <div className="flex flex-col gap-1">
             {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
               <div key={cat} className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                <span className="text-[11px] text-text-secondary capitalize">{cat}</span>
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-[11px] text-text-secondary capitalize">
+                  {cat}
+                </span>
               </div>
             ))}
             <div className="flex items-center gap-1.5 mt-0.5 pt-0.5 border-t border-border">
@@ -569,7 +594,8 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
           COMPONENTES DO A/C
         </h3>
         <p className="mb-4 text-xs text-text-muted">
-          Clique nos pontos no carro 3D ou selecione abaixo os componentes com defeito
+          Clique nos pontos no carro 3D ou selecione abaixo os componentes com
+          defeito
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
           {AC_PARTS.map((part) => {
@@ -587,13 +613,21 @@ export function CarViewer({ selectedParts, onPartToggle }: CarViewerProps) {
                 <div className="flex w-full items-center justify-between">
                   <span
                     className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: isSelected ? "#00f0ff" : CATEGORY_COLORS[part.category] }}
+                    style={{
+                      backgroundColor: isSelected
+                        ? "#00f0ff"
+                        : CATEGORY_COLORS[part.category],
+                    }}
                   />
                   {isSelected && (
-                    <span className="text-[10px] font-bold text-neon-cyan">SELECIONADO</span>
+                    <span className="text-[10px] font-bold text-neon-cyan">
+                      SELECIONADO
+                    </span>
                   )}
                 </div>
-                <span className={`mt-2 text-sm font-medium ${isSelected ? "text-neon-cyan" : "text-text-primary"}`}>
+                <span
+                  className={`mt-2 text-sm font-medium ${isSelected ? "text-neon-cyan" : "text-text-primary"}`}
+                >
                   {part.name}
                 </span>
                 <span className="mt-0.5 text-[11px] text-text-muted line-clamp-2">

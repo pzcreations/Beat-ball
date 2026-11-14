@@ -28,7 +28,7 @@ function buildCsp(nonce: string) {
     "img-src 'self' data: blob:",
     "font-src 'self' fonts.gstatic.com",
     // O navegador só conversa com este servidor (nunca diretamente com o Supabase).
-    `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+    `connect-src 'self' blob:${isDev ? " ws: wss:" : ""}`,
     "manifest-src 'self'",
     "worker-src 'self'",
     "object-src 'none'",
@@ -132,6 +132,6 @@ export const config = {
   matcher: [
     // Tudo, exceto arquivos estáticos, ícones, manifest, service worker e página offline.
     // A rota do agendador (api/cron) tem autenticação própria por segredo.
-    "/((?!_next/static|_next/image|icons/|favicon.ico|manifest.webmanifest|sw.js|offline.html|robots.txt|api/cron/).*)",
+    "/((?!_next/static|_next/image|icons/|models/|favicon.ico|manifest.webmanifest|sw.js|offline.html|robots.txt|api/cron/).*)",
   ],
 };

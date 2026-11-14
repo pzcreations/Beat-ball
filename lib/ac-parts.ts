@@ -19,7 +19,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Compressor do ar-condicionado — responsável por pressurizar o gás refrigerante",
     defaultPrice: 850,
     category: "motor",
-    position: { x: -0.8, y: 0.3, z: 0.5 },
+    position: { x: -0.35, y: 0.22, z: 0.55 },
   },
   {
     id: "condensador",
@@ -27,7 +27,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Dissipa o calor do gás refrigerante, localizado na frente do radiador",
     defaultPrice: 420,
     category: "frontal",
-    position: { x: 0, y: 0.4, z: 1.8 },
+    position: { x: 0, y: 0.25, z: 0.9 },
   },
   {
     id: "evaporador",
@@ -35,7 +35,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Responsável por resfriar o ar que entra na cabine do veículo",
     defaultPrice: 580,
     category: "cabine",
-    position: { x: 0, y: 0.7, z: 0.6 },
+    position: { x: 0, y: 0.45, z: 0.2 },
   },
   {
     id: "valvula-expansao",
@@ -43,7 +43,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Controla o fluxo de refrigerante para o evaporador",
     defaultPrice: 220,
     category: "cabine",
-    position: { x: 0.3, y: 0.5, z: 0.5 },
+    position: { x: 0.2, y: 0.35, z: 0.15 },
   },
   {
     id: "filtro-secador",
@@ -51,7 +51,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Filtra impurezas e remove umidade do sistema",
     defaultPrice: 180,
     category: "motor",
-    position: { x: -0.5, y: 0.5, z: 1.2 },
+    position: { x: -0.25, y: 0.35, z: 0.7 },
   },
   {
     id: "embreagem-compressor",
@@ -59,7 +59,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Acoplamento eletromagnético que liga/desliga o compressor",
     defaultPrice: 350,
     category: "motor",
-    position: { x: -1.0, y: 0.2, z: 0.5 },
+    position: { x: -0.45, y: 0.18, z: 0.5 },
   },
   {
     id: "motor-ventilador",
@@ -67,7 +67,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Ventilador que sopra o ar frio para dentro da cabine",
     defaultPrice: 290,
     category: "cabine",
-    position: { x: 0, y: 0.6, z: 0.3 },
+    position: { x: 0, y: 0.4, z: 0.05 },
   },
   {
     id: "mangueiras",
@@ -75,7 +75,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Linhas de alta e baixa pressão que conectam os componentes",
     defaultPrice: 260,
     category: "conexao",
-    position: { x: -0.3, y: 0.4, z: 1.0 },
+    position: { x: -0.15, y: 0.28, z: 0.55 },
   },
   {
     id: "pressostato",
@@ -83,7 +83,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Sensor de pressão que protege o sistema contra sobrecarga",
     defaultPrice: 120,
     category: "motor",
-    position: { x: -0.6, y: 0.6, z: 0.8 },
+    position: { x: -0.3, y: 0.4, z: 0.6 },
   },
   {
     id: "ventoinha-condensador",
@@ -91,7 +91,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Ventilador auxiliar que ajuda a dissipar calor do condensador",
     defaultPrice: 310,
     category: "frontal",
-    position: { x: 0, y: 0.3, z: 1.9 },
+    position: { x: 0, y: 0.2, z: 0.95 },
   },
   {
     id: "gas-refrigerante",
@@ -99,7 +99,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Recarga do gás R134a ou R1234yf do sistema",
     defaultPrice: 150,
     category: "conexao",
-    position: { x: 0.5, y: 0.4, z: 0.8 },
+    position: { x: 0.3, y: 0.28, z: 0.5 },
   },
   {
     id: "painel-controle",
@@ -107,7 +107,7 @@ export const AC_PARTS: ACPart[] = [
     description: "Módulo de controle eletrônico do ar-condicionado no painel",
     defaultPrice: 380,
     category: "cabine",
-    position: { x: 0, y: 0.8, z: 0.4 },
+    position: { x: 0, y: 0.5, z: 0.0 },
   },
 ];
 
